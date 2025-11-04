@@ -1,0 +1,252 @@
+# =============================================================================
+# DEADLOCK DETECTION SYSTEM - CURSOR IDE RULES
+# =============================================================================
+# Các quy tắc này hướng dẫn Cursor tạo code hiệu quả cho dự án phát hiện 
+# Deadlock trên hệ thống Unix/Linux
+
+# =============================================================================
+# RULE 1: CODE GENERATION PRINCIPLES
+# =============================================================================
+
+Rule: CodeGenerationStyle
+- Luôn generate **modular, well-organized code**
+- Mỗi module .c phải có corresponding .h file
+- Header file phải có `#ifndef` include guards
+- Implement từ interface (.h) trước, sau đó chi tiết trong .c
+- Không bao giờ có circular dependencies giữa headers
+
+Rule: NamingConventions
+- Functions: snake_case (get_process_list, detect_deadlock)
+- Constants: UPPER_CASE (MAX_PROCESSES, ERROR_FILE_NOT_FOUND)
+- Structs: PascalCase (ResourceGraph, ProcessNode)
+- Global vars: g_snake_case (g_process_count)
+- Static vars: s_snake_case trong file
+- File names: snake_case.c/.h
+
+Rule: CommentingStandard
+BEFORE each function, viết:
+/*
+ * function_name - brief description
+ * @param1: description
+ * @param2: description
+ * @return: what it returns
+ * Description: detailed explanation, algorithms, complexity
+ * Error handling: how errors are reported
+ */
+
+Rule: ErrorHandling
+- LUÔN define error codes chung (SUCCESS=0, ERROR_*=-1,-2,...)
+- Mỗi function return >= 0 cho success, < 0 cho errors
+- Check tất cả pointer returns từ malloc
+- Use safe_malloc() wrapper từ utility.c
+- Luôn log errors với error_log() macro
+
+Rule: MemoryManagement
+- Mỗi malloc() phải có corresponding free() hoặc cleanup_*() function
+- Không để dangling pointers
+- Sử dụng valgrind-safe coding patterns
+- Tránh buffer overflows (use snprintf thay sprintf)
+- Initialize tất cả variables trước khi dùng
+
+# =============================================================================
+# RULE 2: MODULE-SPECIFIC RULES
+# =============================================================================
+
+Rule: ProcessMonitor
+- MUST read từ /proc filesystem (không sử dụng system calls khác)
+- Implement: get_all_processes(), get_process_info(), read_proc_file()
+- Parse /proc/[PID]/status, /proc/[PID]/fd, /proc/[PID]/locks
+- Handle process termination gracefully (ENOENT)
+- Cache reads để tránh repeated I/O
+- Complexity: O(n) where n = number of processes
+
+Rule: ResourceGraph
+- Use adjacency list, không adjacency matrix (vì sparse)
+- Implement: add_request_edge(), add_allocation_edge()
+- Support both single-instance và multiple-instance resources
+- Convert RAG to WFG nếu cần
+- Memory: O(V+E) where V=vertices, E=edges
+
+Rule: CycleDetection
+- MUST implement DFS-based cycle detection
+- Use 3-color marking: WHITE(0), GRAY(1), BLACK(2)
+- Detect back edges khi gặp GRAY vertex
+- Extract complete cycle path, không chỉ node
+- Return ALL cycles found, không stop at first
+- Time Complexity: MUST be O(V+E)
+- Space Complexity: O(V)
+
+Rule: DeadlockDetection
+- Gọi cycle detection
+- Filter cycles để xác định processes bị deadlock
+- Xử lý both single-instance (definite deadlock) và 
+  multiple-instance (potential deadlock)
+- Recommend kiến thức về Coffman conditions
+
+Rule: OutputHandler
+- Support 3 formats: TEXT (default), JSON, VERBOSE
+- Include process names, PIDs, wait chain
+- Show resource information (ID, type, holders)
+- Provide actionable recommendations
+- Make output parseable (cho integration with other tools)
+
+Rule: UtilityModule
+- safe_malloc(), safe_realloc(), safe_free()
+- String utilities: trim, split, starts_with
+- File utilities: file_exists, read_file
+- Error logging: error_log, debug_log, info_log
+- These MUST be used khắp codebase
+
+# =============================================================================
+# RULE 3: QUALITY ASSURANCE
+# =============================================================================
+
+Rule: CompilerWarnings
+- MUST compile với: gcc -Wall -Wextra -std=c99 -pedantic
+- KHÔNG được có compiler warnings
+- Sử dụng -Werror nếu cần strict mode
+
+Rule: MemorySafety
+- MUST pass: valgrind --leak-check=full
+- KHÔNG được memory leaks
+- KHÔNG được out-of-bounds access
+- KHÔNG được use-after-free
+
+Rule: Robustness
+- Handle: process không tồn tại (ENOENT)
+- Handle: permission denied (EACCES)
+- Handle: out of memory
+- Handle: graph với >10000 vertices
+- Handle: circular references trong resource hierarchy
+
+Rule: Testing
+- Generate unit tests cho mỗi module
+- Test cases: no deadlock, simple deadlock, complex deadlock
+- Test edge cases: empty graph, single process, disconnected graph
+
+Rule: Documentation
+- Header files: chứa đầy đủ function descriptions
+- Source files: explain complex algorithms
+- Main.c: có usage examples và CLI help
+- README: hướng dẫn build, run, debug
+
+# =============================================================================
+# RULE 4: PERFORMANCE RULES
+# =============================================================================
+
+Rule: GraphRepresentation
+- Sử dụng adjacency list (không matrix) cho sparse graphs
+- Allocate incrementally, không pre-allocate quá lớn
+- Reuse graph structures nếu continuous monitoring
+
+Rule: AlgorithmOptimization
+- DFS: tối ưu để tránh revisiting nodes
+- Process discovery: cache results
+- File reading: minimize /proc accesses
+- Only recompute khi có changes
+
+Rule: ResourceUsage
+- Max memory: < 10MB cho 1000 processes
+- Acceptable time: < 500ms cho 1000 processes
+- No infinite loops hoặc busy waiting
+
+# =============================================================================
+# RULE 5: CODE GENERATION WORKFLOW
+# =============================================================================
+
+Rule: GenerationOrder
+1. FIRST: Header files (.h) cho tất cả modules
+2. THEN: Utility module (utility.c/.h)
+3. THEN: Process monitor module
+4. THEN: Resource graph module
+5. THEN: Cycle detection module
+6. THEN: Deadlock detection module
+7. THEN: Output handler module
+8. THEN: main.c integration
+9. FINALLY: Unit tests
+
+Rule: GenerationSize
+- Mỗi file: 100-300 lines (manageable size)
+- Không viết files quá dài (>500 lines)
+- Split logic thành multiple functions
+
+Rule: IncompleteCodePattern
+Nếu code không complete, ALWAYS:
+- Thêm TODO comments
+- Provide skeleton functions
+- Giải thích cần implement gì
+
+# =============================================================================
+# RULE 6: SPECIAL HANDLING
+# =============================================================================
+
+Rule: /procFilesystemHandling
+- ALWAYS check file tồn tại trước khi read
+- ALWAYS handle ENOENT (process terminated)
+- ALWAYS handle EACCES (permission)
+- Use open()/read() hoặc fopen()/fgets()
+- Parse line-by-line, không assume format
+
+Rule: GraphCycleHandling
+- Một cycle có thể liên quan đến 2-N processes
+- Một process có thể trong multiple cycles
+- Extract cycle as ordered list: P1→R1→P2→R2→P1
+- Store both processes và resources trong cycle
+
+Rule: EdgeCaseHandling
+- Xử lý process list rỗng
+- Xử lý process với 0 resources
+- Xử lý graph với 1 vertex (không cycle)
+- Xử lý multi-digit PIDs (> 9999)
+
+# =============================================================================
+# RULE 7: DEBUGGING AIDS
+# =============================================================================
+
+Rule: DebugOutput
+- ALWAYS provide debug_log() macro implementation
+- Generate với ifdef DEBUG blocks
+- Include timing info: printf timing when -v flag
+- Include graph visualization output
+
+Rule: ErrorMessages
+- Descriptive: "Failed to open /proc/1234/status: Permission denied"
+- Include errno details
+- Suggest solutions khi có thể
+- Log to stderr, info_log to stdout
+
+# =============================================================================
+# RULE 8: BUILD SYSTEM
+# =============================================================================
+
+Rule: MakefileGeneration
+- CC := gcc
+- CFLAGS := -Wall -Wextra -O2 -std=c99 -D_POSIX_C_SOURCE=200809L
+- LDFLAGS := -lpthread
+- Targets: all, clean, test
+- Output: bin/deadlock_detector
+- Objects: obj/*.o
+
+# =============================================================================
+# RULE 9: PROJECT STRUCTURE
+# =============================================================================
+
+Rule: DirectoryLayout
+deadlock_detector/
+├── src/
+│   ├── *.c files (8-10 files)
+│   ├── *.h files (same)
+│   └── config.h (constants)
+├── test/
+│   ├── test_*.c (3-5 files)
+│   └── test_data.c
+├── obj/ (generated)
+├── bin/ (generated)
+├── Makefile
+├── README.md
+├── instruction.md
+└── .gitignore
+
+# =============================================================================
+# END OF RULES
+# =============================================================================
