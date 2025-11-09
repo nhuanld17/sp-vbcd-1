@@ -207,6 +207,8 @@ static int parse_arguments(int argc, char** argv, CommandLineArgs* args)
  *              2. Build Resource Allocation Graph
  *              3. Detect cycles
  *              4. Analyze and report deadlocks
+ * Note: All allocated resources are properly freed, including DeadlockReport
+ *       structure itself, even on error paths.
  */
 static int run_detection(const CommandLineArgs* args)
 {
@@ -214,19 +216,27 @@ static int run_detection(const CommandLineArgs* args)
         return ERROR_INVALID_ARGUMENT;
     }
     
+    /* Initialize all pointers to NULL for proper cleanup */
+    pid_t* pids = NULL;
+    ProcessResourceInfo* procs = NULL;
+    DeadlockReport* report = NULL;
+    int success_count = 0;
+    int return_code = SUCCESS;
+    
     /* Step 1: Collect process information */
     int num_procs = 0;
-    pid_t* pids = get_all_processes(&num_procs);
+    pids = get_all_processes(&num_procs);
     
     if (pids == NULL) {
         error_log("Failed to get process list");
-        return ERROR_SYSTEM_CALL_FAILED;
+        return_code = ERROR_SYSTEM_CALL_FAILED;
+        goto cleanup;
     }
     
     if (num_procs == 0) {
         info_log("No processes found");
-        free_process_list(pids);
-        return SUCCESS;
+        return_code = SUCCESS;
+        goto cleanup;
     }
     
     if (args->verbose) {
@@ -234,15 +244,14 @@ static int run_detection(const CommandLineArgs* args)
     }
     
     /* Step 2: Get process resource information */
-    ProcessResourceInfo* procs = (ProcessResourceInfo*)safe_malloc(
+    procs = (ProcessResourceInfo*)safe_malloc(
         sizeof(ProcessResourceInfo) * num_procs);
     if (procs == NULL) {
-        free_process_list(pids);
-        return ERROR_OUT_OF_MEMORY;
+        return_code = ERROR_OUT_OF_MEMORY;
+        goto cleanup;
     }
     
     /* Initialize and collect resource info for each process */
-    int success_count = 0;
     for (int i = 0; i < num_procs; i++) {
         memset(&procs[success_count], 0, sizeof(ProcessResourceInfo));
         int result = get_process_resources(pids[i], &procs[success_count]);
@@ -255,9 +264,8 @@ static int run_detection(const CommandLineArgs* args)
     
     if (success_count == 0) {
         info_log("No process resource information available");
-        free(procs);
-        free_process_list(pids);
-        return SUCCESS;
+        return_code = SUCCESS;
+        goto cleanup;
     }
     
     if (args->verbose) {
@@ -265,27 +273,18 @@ static int run_detection(const CommandLineArgs* args)
     }
     
     /* Step 3: Detect deadlock */
-    DeadlockReport* report = create_deadlock_report();
+    report = create_deadlock_report();
     if (report == NULL) {
-        for (int i = 0; i < success_count; i++) {
-            free_process_resource_info(&procs[i]);
-        }
-        free(procs);
-        free_process_list(pids);
-        return ERROR_OUT_OF_MEMORY;
+        return_code = ERROR_OUT_OF_MEMORY;
+        goto cleanup;
     }
     
     int deadlock_status = detect_deadlock_in_system(procs, success_count, report);
     
     if (deadlock_status < 0) {
         error_log("Deadlock detection failed: %d", deadlock_status);
-        free_deadlock_report(report);
-        for (int i = 0; i < success_count; i++) {
-            free_process_resource_info(&procs[i]);
-        }
-        free(procs);
-        free_process_list(pids);
-        return deadlock_status;
+        return_code = deadlock_status;
+        goto cleanup;
     }
     
     /* Step 4: Display results */
@@ -308,11 +307,13 @@ static int run_detection(const CommandLineArgs* args)
             int export_result = export_to_file(report, args->output_file, fmt);
             if (export_result != SUCCESS) {
                 error_log("Failed to export report to file: %s", args->output_file);
+                /* Non-fatal error, continue */
             }
         } else {
             int display_result = display_deadlock_report(report, fmt);
             if (display_result != SUCCESS) {
                 error_log("Failed to display report: %d", display_result);
+                /* Non-fatal error, continue */
             }
         }
     } else {
@@ -323,16 +324,32 @@ static int run_detection(const CommandLineArgs* args)
         }
     }
     
-    /* Step 5: Cleanup */
-    free_deadlock_report(report);
+    return_code = SUCCESS;
     
-    for (int i = 0; i < success_count; i++) {
-        free_process_resource_info(&procs[i]);
+cleanup:
+    /* Step 5: Cleanup - ensure all resources are freed */
+    /* Free DeadlockReport (frees structure and all nested allocations) */
+    if (report != NULL) {
+        free_deadlock_report(report);
+        report = NULL;
     }
-    free(procs);
-    free_process_list(pids);
     
-    return SUCCESS;
+    /* Free process resource info */
+    if (procs != NULL) {
+        for (int i = 0; i < success_count; i++) {
+            free_process_resource_info(&procs[i]);
+        }
+        free(procs);
+        procs = NULL;
+    }
+    
+    /* Free process list */
+    if (pids != NULL) {
+        free_process_list(pids);
+        pids = NULL;
+    }
+    
+    return return_code;
 }
 
 /* =============================================================================
