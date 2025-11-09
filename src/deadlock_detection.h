@@ -185,5 +185,19 @@ void free_deadlock_report(DeadlockReport* report);
  */
 int is_deadlock_definite(const CycleInfo* cycle, const ResourceGraph* graph);
 
+/*
+ * analyze_pipe_and_lock_dependencies - Analyze pipe and lock dependencies
+ * @procs: Array of ProcessResourceInfo structures
+ * @num_procs: Number of processes
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Analyzes system-wide locks and pipe relationships to determine
+ *              which processes are waiting on which resources/processes.
+ *              Updates ProcessResourceInfo structures with waiting resources
+ *              and waiting_on_pids. This enables detection of pipe and lock deadlocks.
+ *              Time complexity: O(P * L + P * F) where P=processes, L=locks, F=FDs
+ * Error handling: Returns error codes for allocation or access issues
+ */
+int analyze_pipe_and_lock_dependencies(ProcessResourceInfo* procs, int num_procs);
+
 #endif /* DEADLOCK_DETECTION_H */
 

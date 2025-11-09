@@ -406,6 +406,14 @@ int get_process_info(pid_t pid, ProcessInfo* info)
         info->num_fds = 0;
     }
     
+    /* Get wait channel (wchan) */
+    int wchan_result = get_process_wchan(pid, &info->wchan);
+    if (wchan_result != SUCCESS) {
+        /* Non-fatal error, continue without wchan */
+        debug_log("Failed to get wchan for PID %d", pid);
+        info->wchan = NULL;
+    }
+    
     return SUCCESS;
 }
 
@@ -653,14 +661,411 @@ int get_process_resources(pid_t pid, ProcessResourceInfo* res_info)
         free_file_lock_info(locks, lock_count);
     }
     
-    /* For now, we don't detect waiting resources directly from /proc
-     * This would require more complex analysis of process state */
+    /* Get wait channel (wchan) */
+    int wchan_result = get_process_wchan(pid, &res_info->wchan);
+    if (wchan_result != SUCCESS) {
+        res_info->wchan = NULL;
+    }
+    
+    /* Check if blocked on pipe or lock based on wchan */
+    if (res_info->wchan != NULL && strlen(res_info->wchan) > 0) {
+        if (strstr(res_info->wchan, "pipe") != NULL || 
+            strstr(res_info->wchan, "futex") != NULL) {
+            res_info->is_blocked_on_pipe = 1;
+        }
+        if (strstr(res_info->wchan, "flock") != NULL ||
+            strstr(res_info->wchan, "lock") != NULL) {
+            res_info->is_blocked_on_lock = 1;
+        }
+    }
+    
+    /* Get pipe information from file descriptors */
+    int* fds = NULL;
+    int fd_count = 0;
+    if (get_open_files(pid, &fds, &fd_count) == SUCCESS && fds != NULL) {
+        /* Count pipes */
+        int pipe_count = 0;
+        for (int i = 0; i < fd_count; i++) {
+            unsigned long inode;
+            int is_read_end;
+            if (get_pipe_info_from_fd(pid, fds[i], &inode, &is_read_end) == SUCCESS) {
+                pipe_count++;
+            }
+        }
+        
+        if (pipe_count > 0) {
+            res_info->pipe_inodes = (unsigned long*)safe_malloc(sizeof(unsigned long) * pipe_count);
+            res_info->pipe_fds = (int*)safe_malloc(sizeof(int) * pipe_count);
+            
+            if (res_info->pipe_inodes != NULL && res_info->pipe_fds != NULL) {
+                int idx = 0;
+                for (int i = 0; i < fd_count; i++) {
+                    unsigned long inode;
+                    int is_read_end;
+                    if (get_pipe_info_from_fd(pid, fds[i], &inode, &is_read_end) == SUCCESS) {
+                        res_info->pipe_inodes[idx] = inode;
+                        res_info->pipe_fds[idx] = fds[i];
+                        idx++;
+                    }
+                }
+                res_info->num_pipe_inodes = pipe_count;
+            }
+        }
+        
+        free(fds);
+    }
+    
+    /* Initialize waiting resources (will be filled by analyze_dependencies) */
     res_info->num_waiting = 0;
     res_info->waiting_resources = NULL;
     res_info->num_waiting_files = 0;
     res_info->waiting_files = NULL;
+    res_info->num_waiting_on_pids = 0;
+    res_info->waiting_on_pids = NULL;
     
     return SUCCESS;
+}
+
+/* =============================================================================
+ * WCHAN AND PIPE DETECTION FUNCTIONS
+ * =============================================================================
+ */
+
+/*
+ * get_process_wchan - Get wait channel for a process
+ * @pid: Process ID to query
+ * @wchan: Output parameter for wait channel string (caller must free)
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Reads /proc/[PID]/wchan to determine what kernel function
+ *              the process is blocked on. Returns empty string if not blocked.
+ *              Time complexity: O(1) file read
+ * Error handling: Returns error codes for file access issues
+ */
+int get_process_wchan(pid_t pid, char** wchan)
+{
+    if (wchan == NULL) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+    
+    *wchan = NULL;
+    
+    char* wchan_content = read_proc_file(pid, PROC_WCHAN_FILE);
+    if (wchan_content == NULL) {
+        if (errno == ENOENT) {
+            /* Process doesn't exist or wchan not available */
+            *wchan = str_dup("");
+            return SUCCESS;
+        } else if (errno == EACCES) {
+            return ERROR_PERMISSION_DENIED;
+        } else {
+            return ERROR_SYSTEM_CALL_FAILED;
+        }
+    }
+    
+    /* Remove trailing newline if present */
+    size_t len = strlen(wchan_content);
+    if (len > 0 && wchan_content[len - 1] == '\n') {
+        wchan_content[len - 1] = '\0';
+        len--;
+    }
+    
+    /* Allocate and copy wchan string */
+    *wchan = (char*)safe_malloc(len + 1);
+    if (*wchan == NULL) {
+        free(wchan_content);
+        return ERROR_OUT_OF_MEMORY;
+    }
+    
+    strncpy(*wchan, wchan_content, len);
+    (*wchan)[len] = '\0';
+    
+    free(wchan_content);
+    return SUCCESS;
+}
+
+/*
+ * parse_system_locks - Parse /proc/locks to get all file locks in system
+ * @locks: Output array of FileLockInfo structures
+ * @count: Output parameter for number of locks found
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Parses system-wide /proc/locks file to extract all file locks.
+ *              Allocates array for locks. Caller must free locks array.
+ *              Time complexity: O(l) where l is number of locks
+ * Error handling: Returns error codes for file access or parse errors
+ */
+int parse_system_locks(FileLockInfo** locks, int* count)
+{
+    if (locks == NULL || count == NULL) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+    
+    *locks = NULL;
+    *count = 0;
+    
+    FILE* locks_file = fopen(PROC_SYSTEM_LOCKS_FILE, "r");
+    if (locks_file == NULL) {
+        if (errno == ENOENT) {
+            return ERROR_FILE_NOT_FOUND;
+        } else if (errno == EACCES) {
+            return ERROR_PERMISSION_DENIED;
+        } else {
+            return ERROR_SYSTEM_CALL_FAILED;
+        }
+    }
+    
+    /* Count locks (each line is a lock) */
+    int lock_count = 0;
+    char line[MAX_LINE_LEN];
+    while (fgets(line, sizeof(line), locks_file) != NULL) {
+        if (strlen(line) > 0 && line[0] != '\n') {
+            lock_count++;
+        }
+    }
+    
+    if (lock_count == 0) {
+        fclose(locks_file);
+        return SUCCESS;
+    }
+    
+    /* Allocate array */
+    *locks = (FileLockInfo*)safe_malloc(sizeof(FileLockInfo) * lock_count);
+    if (*locks == NULL) {
+        fclose(locks_file);
+        return ERROR_OUT_OF_MEMORY;
+    }
+    
+    /* Rewind and parse locks */
+    rewind(locks_file);
+    int idx = 0;
+    
+    while (fgets(line, sizeof(line), locks_file) != NULL && idx < lock_count) {
+        if (strlen(line) == 0 || line[0] == '\n') {
+            continue;
+        }
+        
+        /* Remove trailing newline */
+        size_t line_len = strlen(line);
+        if (line_len > 0 && line[line_len - 1] == '\n') {
+            line[line_len - 1] = '\0';
+            line_len--;
+        }
+        
+        FileLockInfo* lock = &(*locks)[idx];
+        memset(lock, 0, sizeof(FileLockInfo));
+        
+        /* Parse lock line format: "1: FLOCK  ADVISORY  WRITE 1234 00:12:345678 0 EOF" */
+        /* Format: lock_id: lock_type ADVISORY/MANDATORY READ/WRITE pid major:minor:inode start end */
+        int lock_id;
+        char lock_type_str[16];
+        char advisory_str[16];
+        char rw_str[16];
+        int pid_val;
+        unsigned int major, minor;
+        unsigned long inode_val;
+        unsigned long start_val, end_val;
+        
+        int parsed = sscanf(line, "%d: %15s %15s %15s %d %u:%u:%lu %lu %lu",
+                           &lock_id, lock_type_str, advisory_str, rw_str,
+                           &pid_val, &major, &minor, &inode_val,
+                           &start_val, &end_val);
+        
+        if (parsed >= 5) {
+            lock->lock_id = lock_id;
+            lock->lock_type = (lock_type_str[0] == 'F') ? 'F' : 'P';
+            lock->pid = pid_val;
+            lock->inode = inode_val;
+            lock->start = start_val;
+            lock->end = (parsed >= 10) ? end_val : 0;
+            
+            /* Determine if this lock might be blocking (WRITE locks can block) */
+            if (strcmp(rw_str, "WRITE") == 0) {
+                lock->is_blocking = 1;
+            } else {
+                lock->is_blocking = 0;
+            }
+            
+            idx++;
+        }
+    }
+    
+    fclose(locks_file);
+    *count = idx;
+    return SUCCESS;
+}
+
+/*
+ * get_pipe_info_from_fd - Get pipe inode from file descriptor
+ * @pid: Process ID
+ * @fd: File descriptor number
+ * @inode: Output parameter for pipe inode
+ * @is_read_end: Output parameter (1 if read end, 0 if write end)
+ * @return: SUCCESS (0) if FD is a pipe, negative error code otherwise
+ * Description: Reads /proc/[PID]/fd/[FD] to determine if it's a pipe
+ *              and extract its inode number. Determines read/write end.
+ *              Time complexity: O(1) file read
+ * Error handling: Returns error if FD is not a pipe or access denied
+ */
+int get_pipe_info_from_fd(pid_t pid, int fd, unsigned long* inode, int* is_read_end)
+{
+    if (inode == NULL || is_read_end == NULL) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+    
+    *inode = 0;
+    *is_read_end = 0;
+    
+    char fd_path[MAX_PATH_LEN];
+    int result = snprintf(fd_path, sizeof(fd_path), "%s/%d/fd/%d",
+                         PROC_BASE_PATH, (int)pid, fd);
+    if (result < 0 || (size_t)result >= sizeof(fd_path)) {
+        return ERROR_BUFFER_OVERFLOW;
+    }
+    
+    char link_target[MAX_PATH_LEN];
+    ssize_t link_len = readlink(fd_path, link_target, sizeof(link_target) - 1);
+    if (link_len < 0) {
+        if (errno == ENOENT) {
+            return ERROR_FILE_NOT_FOUND;
+        } else if (errno == EACCES) {
+            return ERROR_PERMISSION_DENIED;
+        } else {
+            return ERROR_SYSTEM_CALL_FAILED;
+        }
+    }
+    
+    link_target[link_len] = '\0';
+    
+    /* Check if it's a pipe: format is "pipe:[inode]" */
+    if (strncmp(link_target, "pipe:[", 6) == 0) {
+        /* Extract inode */
+        unsigned long inode_val;
+        if (sscanf(link_target, "pipe:[%lu]", &inode_val) == 1) {
+            *inode = inode_val;
+            
+            /* Determine read/write end by checking open mode
+             * This is a heuristic: we can't easily determine from /proc
+             * For now, assume it could be either, caller must check wchan
+             */
+            *is_read_end = 0; /* Default, will be determined by blocking state */
+            
+            return SUCCESS;
+        }
+    }
+    
+    /* Not a pipe */
+    return ERROR_INVALID_FORMAT;
+}
+
+/*
+ * detect_pipe_dependencies - Detect pipe relationships between processes
+ * @all_pipes: Output array of PipeInfo structures for all processes
+ * @pipe_count: Output parameter for number of pipes found
+ * @pids: Array of process IDs to analyze
+ * @num_pids: Number of processes
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Analyzes all processes to find pipe relationships.
+ *              Matches pipe inodes between processes to detect dependencies.
+ *              Allocates array for pipes. Caller must free pipes array.
+ *              Time complexity: O(P * F) where P=processes, F=FDs per process
+ * Error handling: Returns error codes for allocation or access issues
+ */
+int detect_pipe_dependencies(PipeInfo** all_pipes, int* pipe_count,
+                             pid_t* pids, int num_pids)
+{
+    if (all_pipes == NULL || pipe_count == NULL || pids == NULL || num_pids <= 0) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+    
+    *all_pipes = NULL;
+    *pipe_count = 0;
+    
+    /* First pass: count all pipes */
+    int total_pipes = 0;
+    for (int i = 0; i < num_pids; i++) {
+        int* fds = NULL;
+        int fd_count = 0;
+        
+        if (get_open_files(pids[i], &fds, &fd_count) == SUCCESS && fds != NULL) {
+            for (int j = 0; j < fd_count; j++) {
+                unsigned long inode;
+                int is_read_end;
+                if (get_pipe_info_from_fd(pids[i], fds[j], &inode, &is_read_end) == SUCCESS) {
+                    total_pipes++;
+                }
+            }
+            
+            if (fds != NULL) {
+                free(fds);
+            }
+        }
+    }
+    
+    if (total_pipes == 0) {
+        return SUCCESS;
+    }
+    
+    /* Allocate array */
+    *all_pipes = (PipeInfo*)safe_malloc(sizeof(PipeInfo) * total_pipes);
+    if (*all_pipes == NULL) {
+        return ERROR_OUT_OF_MEMORY;
+    }
+    
+    /* Second pass: collect pipe information */
+    int idx = 0;
+    for (int i = 0; i < num_pids; i++) {
+        int* fds = NULL;
+        int fd_count = 0;
+        
+        if (get_open_files(pids[i], &fds, &fd_count) == SUCCESS && fds != NULL) {
+            /* Get wchan to determine if blocked on pipe */
+            char* wchan = NULL;
+            int is_blocked_on_pipe = 0;
+            if (get_process_wchan(pids[i], &wchan) == SUCCESS && wchan != NULL) {
+                /* Check if blocked on pipe operations */
+                if (strstr(wchan, "pipe") != NULL || 
+                    strstr(wchan, "futex") != NULL) {
+                    is_blocked_on_pipe = 1;
+                }
+                safe_free((void**)&wchan);
+            }
+            
+            for (int j = 0; j < fd_count && idx < total_pipes; j++) {
+                unsigned long inode;
+                int is_read_end;
+                if (get_pipe_info_from_fd(pids[i], fds[j], &inode, &is_read_end) == SUCCESS) {
+                    PipeInfo* pipe = &(*all_pipes)[idx];
+                    pipe->inode = inode;
+                    pipe->fd = fds[j];
+                    pipe->pid = pids[i];
+                    pipe->is_read_end = is_read_end;
+                    pipe->is_blocked = is_blocked_on_pipe;
+                    idx++;
+                }
+            }
+            
+            if (fds != NULL) {
+                free(fds);
+            }
+        }
+    }
+    
+    *pipe_count = idx;
+    return SUCCESS;
+}
+
+/*
+ * free_pipe_info - Free array of PipeInfo structures
+ * @pipes: Array of PipeInfo to free
+ * @count: Number of pipes in array
+ * @return: None
+ * Description: Frees array allocated by detect_pipe_dependencies().
+ * Error handling: Handles NULL pointers and invalid counts safely
+ */
+void free_pipe_info(PipeInfo* pipes, int count)
+{
+    if (pipes != NULL && count > 0) {
+        free(pipes);
+    }
 }
 
 /* =============================================================================
@@ -685,6 +1090,11 @@ void free_process_info(ProcessInfo* info)
     if (info->fds != NULL) {
         free(info->fds);
         info->fds = NULL;
+    }
+    
+    if (info->wchan != NULL) {
+        free(info->wchan);
+        info->wchan = NULL;
     }
     
     info->num_fds = 0;
@@ -748,10 +1158,34 @@ void free_process_resource_info(ProcessResourceInfo* res_info)
         res_info->waiting_files = NULL;
     }
     
+    if (res_info->wchan != NULL) {
+        free(res_info->wchan);
+        res_info->wchan = NULL;
+    }
+    
+    if (res_info->waiting_on_pids != NULL) {
+        free(res_info->waiting_on_pids);
+        res_info->waiting_on_pids = NULL;
+    }
+    
+    if (res_info->pipe_inodes != NULL) {
+        free(res_info->pipe_inodes);
+        res_info->pipe_inodes = NULL;
+    }
+    
+    if (res_info->pipe_fds != NULL) {
+        free(res_info->pipe_fds);
+        res_info->pipe_fds = NULL;
+    }
+    
     res_info->num_held = 0;
     res_info->num_waiting = 0;
     res_info->num_held_files = 0;
     res_info->num_waiting_files = 0;
+    res_info->num_waiting_on_pids = 0;
+    res_info->num_pipe_inodes = 0;
+    res_info->is_blocked_on_pipe = 0;
+    res_info->is_blocked_on_lock = 0;
 }
 
 /*

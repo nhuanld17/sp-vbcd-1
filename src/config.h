@@ -103,6 +103,11 @@
 #define PROC_FD_DIR "fd"
 #define PROC_LOCKS_FILE "locks"
 #define PROC_CMDLINE_FILE "cmdline"
+#define PROC_WCHAN_FILE "wchan"
+#define PROC_SYSTEM_LOCKS_FILE "/proc/locks"
+#define MAX_WCHAN_LEN 64
+#define MAX_PIPE_INODES 1024
+#define MAX_WAITING_PIDS 256
 
 /* =============================================================================
  * CACHE SETTINGS

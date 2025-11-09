@@ -7,12 +7,14 @@
  */
 
 #include "deadlock_detection.h"
+#include "process_monitor.h"
 #include "utility.h"
 #include "config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 /* =============================================================================
  * HELPER FUNCTIONS
@@ -905,5 +907,268 @@ void free_deadlock_report(DeadlockReport* report)
     report->num_cycles = 0;
     report->num_explanations = 0;
     report->num_recommendations = 0;
+}
+
+/*
+ * analyze_pipe_and_lock_dependencies - Analyze pipe and lock dependencies
+ * @procs: Array of ProcessResourceInfo structures
+ * @num_procs: Number of processes
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Analyzes system-wide locks and pipe relationships to determine
+ *              which processes are waiting on which resources/processes.
+ *              Updates ProcessResourceInfo structures with waiting resources
+ *              and waiting_on_pids. This enables detection of pipe and lock deadlocks.
+ *              Time complexity: O(P * L + P * F) where P=processes, L=locks, F=FDs
+ * Error handling: Returns error codes for allocation or access issues
+ */
+int analyze_pipe_and_lock_dependencies(ProcessResourceInfo* procs, int num_procs)
+{
+    if (procs == NULL || num_procs <= 0) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+    
+    /* Step 1: Parse system-wide locks */
+    FileLockInfo* system_locks = NULL;
+    int system_lock_count = 0;
+    int lock_result = parse_system_locks(&system_locks, &system_lock_count);
+    
+    if (lock_result != SUCCESS && lock_result != ERROR_FILE_NOT_FOUND) {
+        /* Non-fatal, continue without lock analysis */
+        debug_log("Failed to parse system locks: %d", lock_result);
+    }
+    
+    /* Step 2: Build PID to ProcessResourceInfo map for quick lookup */
+    /* We'll iterate through procs array directly */
+    
+    /* Step 3: Analyze pipe dependencies */
+    /* For each process with pipes, check pipe relationships */
+    for (int i = 0; i < num_procs; i++) {
+        ProcessResourceInfo* proc = &procs[i];
+        
+        /* Check if process has pipes (blocked or not, both can lead to deadlock) */
+        if (proc->num_pipe_inodes > 0) {
+            /* Find processes that share the same pipe inode */
+            for (int j = 0; j < num_procs; j++) {
+                if (i == j) {
+                    continue;
+                }
+                
+                ProcessResourceInfo* other_proc = &procs[j];
+                
+                /* Check if other process has matching pipe inode */
+                for (int k = 0; k < proc->num_pipe_inodes; k++) {
+                    unsigned long pipe_inode = proc->pipe_inodes[k];
+                    
+                    for (int l = 0; l < other_proc->num_pipe_inodes; l++) {
+                        if (other_proc->pipe_inodes[l] == pipe_inode) {
+                            /* Found pipe relationship! */
+                            /* Create resource ID from pipe inode */
+                            int pipe_resource_id = (int)(pipe_inode % 1000000); /* Use last 6 digits as resource ID */
+                            
+                            /* If proc is blocked on pipe, it's waiting for the pipe resource */
+                            if (proc->is_blocked_on_pipe) {
+                                /* Add other_proc->pid to waiting_on_pids */
+                                if (proc->waiting_on_pids == NULL) {
+                                    proc->waiting_on_pids = (int*)safe_malloc(sizeof(int) * MAX_WAITING_PIDS);
+                                    proc->num_waiting_on_pids = 0;
+                                }
+                                
+                                if (proc->num_waiting_on_pids < MAX_WAITING_PIDS) {
+                                    /* Check if PID already in array */
+                                    int found = 0;
+                                    for (int m = 0; m < proc->num_waiting_on_pids; m++) {
+                                        if (proc->waiting_on_pids[m] == other_proc->pid) {
+                                            found = 1;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!found) {
+                                        proc->waiting_on_pids[proc->num_waiting_on_pids++] = other_proc->pid;
+                                    }
+                                }
+                                
+                                /* Add to waiting resources */
+                                if (proc->waiting_resources == NULL) {
+                                    proc->waiting_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
+                                    proc->num_waiting = 0;
+                                }
+                                
+                                if (proc->num_waiting < MAX_RESOURCES_PER_PROCESS) {
+                                    /* Check if resource already in array */
+                                    int res_found = 0;
+                                    for (int m = 0; m < proc->num_waiting; m++) {
+                                        if (proc->waiting_resources[m] == pipe_resource_id) {
+                                            res_found = 1;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!res_found) {
+                                        proc->waiting_resources[proc->num_waiting++] = pipe_resource_id;
+                                    }
+                                }
+                            }
+                            
+                            /* other_proc holds the pipe (has the other end) */
+                            /* Add pipe as held resource for other_proc */
+                            if (other_proc->held_resources == NULL) {
+                                other_proc->held_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
+                                other_proc->num_held = 0;
+                            }
+                            
+                            if (other_proc->num_held < MAX_RESOURCES_PER_PROCESS) {
+                                int held_found = 0;
+                                for (int m = 0; m < other_proc->num_held; m++) {
+                                    if (other_proc->held_resources[m] == pipe_resource_id) {
+                                        held_found = 1;
+                                        break;
+                                    }
+                                }
+                                
+                                if (!held_found) {
+                                    other_proc->held_resources[other_proc->num_held++] = pipe_resource_id;
+                                }
+                            }
+                            
+                            /* If other_proc is also blocked on the same pipe, it creates mutual dependency */
+                            if (other_proc->is_blocked_on_pipe) {
+                                /* Reverse relationship: other_proc is waiting for proc */
+                                if (other_proc->waiting_on_pids == NULL) {
+                                    other_proc->waiting_on_pids = (int*)safe_malloc(sizeof(int) * MAX_WAITING_PIDS);
+                                    other_proc->num_waiting_on_pids = 0;
+                                }
+                                
+                                if (other_proc->num_waiting_on_pids < MAX_WAITING_PIDS) {
+                                    int found = 0;
+                                    for (int m = 0; m < other_proc->num_waiting_on_pids; m++) {
+                                        if (other_proc->waiting_on_pids[m] == proc->pid) {
+                                            found = 1;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!found) {
+                                        other_proc->waiting_on_pids[other_proc->num_waiting_on_pids++] = proc->pid;
+                                    }
+                                }
+                                
+                                /* Add to waiting resources for other_proc */
+                                if (other_proc->waiting_resources == NULL) {
+                                    other_proc->waiting_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
+                                    other_proc->num_waiting = 0;
+                                }
+                                
+                                if (other_proc->num_waiting < MAX_RESOURCES_PER_PROCESS) {
+                                    int res_found = 0;
+                                    for (int m = 0; m < other_proc->num_waiting; m++) {
+                                        if (other_proc->waiting_resources[m] == pipe_resource_id) {
+                                            res_found = 1;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!res_found) {
+                                        other_proc->waiting_resources[other_proc->num_waiting++] = pipe_resource_id;
+                                    }
+                                }
+                                
+                                /* proc also holds the pipe */
+                                if (proc->held_resources == NULL) {
+                                    proc->held_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
+                                    proc->num_held = 0;
+                                }
+                                
+                                if (proc->num_held < MAX_RESOURCES_PER_PROCESS) {
+                                    int held_found = 0;
+                                    for (int m = 0; m < proc->num_held; m++) {
+                                        if (proc->held_resources[m] == pipe_resource_id) {
+                                            held_found = 1;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!held_found) {
+                                        proc->held_resources[proc->num_held++] = pipe_resource_id;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        /* Step 4: Analyze file lock dependencies */
+        if (proc->is_blocked_on_lock && system_locks != NULL && system_lock_count > 0) {
+            /* Find locks that this process is waiting for */
+            for (int j = 0; j < system_lock_count; j++) {
+                FileLockInfo* lock = &system_locks[j];
+                
+                /* Check if this lock is blocking (WRITE lock) */
+                if (lock->is_blocking && lock->pid != proc->pid) {
+                    /* Check if process is blocked waiting for this lock */
+                    /* We need to match based on inode or file path */
+                    /* For now, add all blocking locks as waiting resources */
+                    
+                    int lock_resource_id = lock->lock_id;
+                    
+                    /* Add to waiting resources */
+                    if (proc->waiting_resources == NULL) {
+                        proc->waiting_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
+                        proc->num_waiting = 0;
+                    }
+                    
+                    if (proc->num_waiting < MAX_RESOURCES_PER_PROCESS) {
+                        /* Check if resource already in array */
+                        int res_found = 0;
+                        for (int k = 0; k < proc->num_waiting; k++) {
+                            if (proc->waiting_resources[k] == lock_resource_id) {
+                                res_found = 1;
+                                break;
+                            }
+                        }
+                        
+                        if (!res_found) {
+                            proc->waiting_resources[proc->num_waiting++] = lock_resource_id;
+                            
+                            /* Find process holding the lock and add to waiting_on_pids */
+                            for (int k = 0; k < num_procs; k++) {
+                                if (procs[k].pid == lock->pid) {
+                                    /* Add lock->pid to waiting_on_pids */
+                                    if (proc->waiting_on_pids == NULL) {
+                                        proc->waiting_on_pids = (int*)safe_malloc(sizeof(int) * MAX_WAITING_PIDS);
+                                        proc->num_waiting_on_pids = 0;
+                                    }
+                                    
+                                    if (proc->num_waiting_on_pids < MAX_WAITING_PIDS) {
+                                        int pid_found = 0;
+                                        for (int m = 0; m < proc->num_waiting_on_pids; m++) {
+                                            if (proc->waiting_on_pids[m] == lock->pid) {
+                                                pid_found = 1;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (!pid_found) {
+                                            proc->waiting_on_pids[proc->num_waiting_on_pids++] = lock->pid;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /* Cleanup */
+    if (system_locks != NULL) {
+        free_file_lock_info(system_locks, system_lock_count);
+    }
+    
+    return SUCCESS;
 }
 

@@ -272,6 +272,15 @@ static int run_detection(const CommandLineArgs* args)
         info_log("Collected resource info for %d processes", success_count);
     }
     
+    /* Step 2.5: Analyze pipe and lock dependencies */
+    int dep_result = analyze_pipe_and_lock_dependencies(procs, success_count);
+    if (dep_result != SUCCESS && args->verbose) {
+        debug_log("Warning: Failed to analyze dependencies: %d", dep_result);
+        /* Continue anyway, partial analysis may still work */
+    } else if (args->verbose) {
+        info_log("Analyzed pipe and lock dependencies");
+    }
+    
     /* Step 3: Detect deadlock */
     report = create_deadlock_report();
     if (report == NULL) {

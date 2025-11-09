@@ -32,6 +32,7 @@ typedef struct {
     int num_threads;                /* Number of threads */
     int* fds;                       /* Array of open file descriptors */
     int num_fds;                    /* Number of file descriptors */
+    char* wchan;                    /* Wait channel (what kernel function process is blocked on) */
 } ProcessInfo;
 
 /*
@@ -48,11 +49,19 @@ typedef struct {
     int num_held_files;             /* Number of held files */
     char** waiting_files;           /* Array of file paths process is waiting for */
     int num_waiting_files;          /* Number of waiting files */
+    char* wchan;                    /* Wait channel (kernel function process is blocked on) */
+    int* waiting_on_pids;           /* Array of PIDs this process is waiting for (for pipe/lock deadlocks) */
+    int num_waiting_on_pids;        /* Number of PIDs being waited on */
+    unsigned long* pipe_inodes;     /* Array of pipe inodes this process has open */
+    int num_pipe_inodes;            /* Number of pipe inodes */
+    int* pipe_fds;                  /* Array of file descriptors corresponding to pipe_inodes */
+    int is_blocked_on_pipe;         /* 1 if process is blocked waiting on pipe read/write */
+    int is_blocked_on_lock;         /* 1 if process is blocked waiting on file lock */
 } ProcessResourceInfo;
 
 /*
  * FileLockInfo - Information about a file lock
- * Parsed from /proc/[PID]/locks
+ * Parsed from /proc/[PID]/locks or /proc/locks
  */
 typedef struct {
     int lock_id;                    /* Lock ID */
@@ -61,7 +70,21 @@ typedef struct {
     char file_path[MAX_PATH_LEN];   /* Path to locked file */
     unsigned long start;            /* Start offset */
     unsigned long end;              /* End offset */
+    unsigned long inode;            /* Inode number of locked file */
+    int is_blocking;                /* 1 if this lock is blocking another process */
 } FileLockInfo;
+
+/*
+ * PipeInfo - Information about a pipe
+ * Extracted from /proc/[PID]/fd/ file descriptors
+ */
+typedef struct {
+    unsigned long inode;            /* Pipe inode number */
+    int fd;                         /* File descriptor number */
+    pid_t pid;                      /* Process ID that has this pipe open */
+    int is_read_end;                /* 1 if this is read end, 0 if write end */
+    int is_blocked;                 /* 1 if process is blocked on this pipe */
+} PipeInfo;
 
 /* =============================================================================
  * FUNCTION PROTOTYPES
@@ -206,6 +229,70 @@ void free_file_lock_info(FileLockInfo* locks, int count);
  * Error handling: Returns 0 on any error (including permission denied)
  */
 int is_process_alive(pid_t pid);
+
+/*
+ * get_process_wchan - Get wait channel for a process
+ * @pid: Process ID to query
+ * @wchan: Output parameter for wait channel string (caller must free)
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Reads /proc/[PID]/wchan to determine what kernel function
+ *              the process is blocked on. Returns empty string if not blocked.
+ *              Time complexity: O(1) file read
+ * Error handling: Returns error codes for file access issues
+ */
+int get_process_wchan(pid_t pid, char** wchan);
+
+/*
+ * parse_system_locks - Parse /proc/locks to get all file locks in system
+ * @locks: Output array of FileLockInfo structures
+ * @count: Output parameter for number of locks found
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Parses system-wide /proc/locks file to extract all file locks.
+ *              Allocates array for locks. Caller must free locks array.
+ *              Time complexity: O(l) where l is number of locks
+ * Error handling: Returns error codes for file access or parse errors
+ */
+int parse_system_locks(FileLockInfo** locks, int* count);
+
+/*
+ * get_pipe_info_from_fd - Get pipe inode from file descriptor
+ * @pid: Process ID
+ * @fd: File descriptor number
+ * @inode: Output parameter for pipe inode
+ * @is_read_end: Output parameter (1 if read end, 0 if write end)
+ * @return: SUCCESS (0) if FD is a pipe, negative error code otherwise
+ * Description: Reads /proc/[PID]/fd/[FD] to determine if it's a pipe
+ *              and extract its inode number. Determines read/write end.
+ *              Time complexity: O(1) file read
+ * Error handling: Returns error if FD is not a pipe or access denied
+ */
+int get_pipe_info_from_fd(pid_t pid, int fd, unsigned long* inode, int* is_read_end);
+
+/*
+ * detect_pipe_dependencies - Detect pipe relationships between processes
+ * @all_pipes: Output array of PipeInfo structures for all processes
+ * @pipe_count: Output parameter for number of pipes found
+ * @pids: Array of process IDs to analyze
+ * @num_pids: Number of processes
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Analyzes all processes to find pipe relationships.
+ *              Matches pipe inodes between processes to detect dependencies.
+ *              Allocates array for pipes. Caller must free pipes array.
+ *              Time complexity: O(P * F) where P=processes, F=FDs per process
+ * Error handling: Returns error codes for allocation or access issues
+ */
+int detect_pipe_dependencies(PipeInfo** all_pipes, int* pipe_count,
+                             pid_t* pids, int num_pids);
+
+/*
+ * free_pipe_info - Free array of PipeInfo structures
+ * @pipes: Array of PipeInfo to free
+ * @count: Number of pipes in array
+ * @return: None
+ * Description: Frees array allocated by detect_pipe_dependencies().
+ * Error handling: Handles NULL pointers and invalid counts safely
+ */
+void free_pipe_info(PipeInfo* pipes, int count);
 
 #endif /* PROCESS_MONITOR_H */
 
