@@ -10,6 +10,7 @@
 #include "process_monitor.h"
 #include "utility.h"
 #include "config.h"
+#include "email_alert.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -852,6 +853,8 @@ int detect_deadlock_in_system(ProcessResourceInfo* procs, int num_procs,
             /* Non-fatal, continue */
         }
     }
+    
+    email_alert_handle_detection(report, report->deadlock_detected ? 1 : 0);
     
     /* Cleanup graph */
     free_graph(graph);
