@@ -1,4 +1,4 @@
-# Deadlock Detection System for Unix/Linux
+# Hệ Thống Phát Hiện Deadlock cho Unix/Linux
 
 Chương trình phát hiện **Deadlock** trong hệ thống **Unix/Ubuntu Linux** sử dụng ngôn ngữ **C**.
 
@@ -59,7 +59,7 @@ Xây dựng một hệ thống phát hiện deadlock chuyên nghiệp có khả 
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Bắt Đầu Nhanh
 
 ### Build:
 ```bash
@@ -88,7 +88,7 @@ make clean && make
 make test
 ```
 
-### Command-line Options:
+### Tùy Chọn Dòng Lệnh:
 ```
 -h, --help              Hiển thị help
 -v, --verbose           Verbose output (debug info)
@@ -173,13 +173,13 @@ deadlock_detector/
 │
 ├── Makefile                             # Build configuration
 ├── README.md                            # This file
-├── instruction.md                       # Detailed instructions for Cursor
+├── DEVELOPMENT_GUIDE.md                 # Detailed instructions for Cursor
 └── .gitignore
 ```
 
 ---
 
-## 🔍 Data Structures
+## 🔍 Cấu Trúc Dữ Liệu
 
 ### ProcessResourceInfo
 ```c
@@ -226,7 +226,7 @@ typedef struct {
 
 ---
 
-## 📥 Input Sources
+## 📥 Nguồn Dữ Liệu Đầu Vào
 
 ### `/proc` Filesystem:
 
@@ -246,9 +246,9 @@ typedef struct {
 
 ---
 
-## 📊 Output Formats
+## 📊 Định Dạng Đầu Ra
 
-### Text Format:
+### Định Dạng Text:
 ```
 ========================================
 DEADLOCK DETECTED!
@@ -267,7 +267,7 @@ Recommendations:
   3. Implement timeout mechanism
 ```
 
-### JSON Format:
+### Định Dạng JSON:
 ```json
 {
   "deadlock_detected": true,
@@ -285,14 +285,14 @@ Recommendations:
 
 ## 🧪 Test Cases
 
-### Test 1: No Deadlock
+### Test 1: Không Có Deadlock
 ```
 Process: P1 locks R1 → releases R1
 Process: P2 locks R2 → releases R2
 Result: No cycle in graph → No deadlock ✓
 ```
 
-### Test 2: Simple Deadlock
+### Test 2: Deadlock Đơn Giản
 ```
 P1: locks R1, waits for R2
 P2: locks R2, waits for R1
@@ -300,7 +300,7 @@ Graph: P1 → R2 → P2 → R1 → P1 (cycle!)
 Result: Deadlock detected ✓
 ```
 
-### Test 3: Complex Deadlock
+### Test 3: Deadlock Phức Tạp
 ```
 P1: locks R1, R2 → waits R3
 P2: locks R3 → waits R1
@@ -313,20 +313,20 @@ Result: Deadlock detected ✓
 
 ## 🔧 Build & Compile
 
-### Requirements:
+### Yêu Cầu:
 - **GCC** (hoặc Clang)
 - **Linux/Unix system** with `/proc` filesystem
 - **Standard C library** (glibc)
 - **POSIX threads** (libpthread)
 
-### Compile Options:
+### Tùy Chọn Compile:
 ```makefile
 CC = gcc
 CFLAGS = -Wall -Wextra -O2 -std=c99 -D_POSIX_C_SOURCE=200809L
 LDFLAGS = -lpthread
 ```
 
-### Warning Handling:
+### Xử Lý Cảnh Báo:
 ```bash
 # Compile without warnings
 make clean && make 2>&1 | grep -i warning
@@ -348,19 +348,19 @@ gdb ./bin/deadlock_detector
 (gdb) continue
 ```
 
-### Valgrind (Memory Check):
+### Valgrind (Kiểm Tra Memory):
 ```bash
 valgrind --leak-check=full --show-leak-kinds=all \
   ./bin/deadlock_detector -v
 ```
 
-### Strace (System Call Tracing):
+### Strace (Theo Dõi System Call):
 ```bash
 strace -e open,read -o trace.txt ./bin/deadlock_detector
 cat trace.txt
 ```
 
-### Run Tests:
+### Chạy Tests:
 ```bash
 make test
 # Output: All tests passed ✓
@@ -368,7 +368,7 @@ make test
 
 ---
 
-## 📈 Performance Characteristics
+## 📈 Đặc Điểm Hiệu Suất
 
 | Scenario | Time | Space | Notes |
 |----------|------|-------|-------|
@@ -376,7 +376,7 @@ make test
 | 1000 processes, complex | ~500ms | ~100KB | Still reasonable |
 | 10000 processes | ~2-5s | ~1MB | May need optimization |
 
-### Optimization Tips:
+### Mẹo Tối Ưu:
 1. **Caching**: Cache `/proc` reads
 2. **Incremental Detection**: Update graph incrementally
 3. **Parallel DFS**: Use multiple threads for large graphs
@@ -384,7 +384,7 @@ make test
 
 ---
 
-## 🚨 Edge Cases Handled
+## 🚨 Các Trường Hợp Biên Đã Xử Lý
 
 - ✅ Process terminates during detection
 - ✅ Permission denied reading `/proc/[PID]`
@@ -396,58 +396,58 @@ make test
 
 ---
 
-## 📚 How to Use with Cursor IDE
+## 📚 Cách Sử Dụng Với Cursor IDE
 
-### Step 1: Prepare
-Copy `instruction.md` to your Cursor IDE project
+### Bước 1: Chuẩn Bị
+Sao chép `DEVELOPMENT_GUIDE.md` vào dự án Cursor IDE của bạn
 
-### Step 2: Setup Project Structure
+### Bước 2: Setup Cấu Trúc Dự Án
 ```bash
 mkdir -p deadlock_detector/{src,test,obj,bin}
 cd deadlock_detector
 ```
 
-### Step 3: Import Instructions to Cursor
-In Cursor IDE:
-1. Open `.cursor/rules` or create it
-2. Paste content from `instruction.md`
-3. Add additional context in prompt
+### Bước 3: Import Instructions vào Cursor
+Trong Cursor IDE:
+1. Mở `.cursor/rules` hoặc tạo nó
+2. Paste nội dung từ `DEVELOPMENT_GUIDE.md`
+3. Thêm context bổ sung trong prompt
 
-### Step 4: Generate Code Module by Module
-**Prompt example for Cursor**:
+### Bước 4: Generate Code Module Theo Module
+**Ví dụ prompt cho Cursor**:
 ```
-Based on the instruction.md file provided, generate the process_monitor.c 
-and process_monitor.h modules. 
+Dựa trên file DEVELOPMENT_GUIDE.md được cung cấp, hãy tạo các module 
+process_monitor.c và process_monitor.h. 
 
-Key requirements:
-- Use /proc filesystem to read process information
+Yêu cầu chính:
+- Sử dụng /proc filesystem để đọc thông tin tiến trình
 - Implement get_all_processes(), get_process_info(), get_process_resources()
-- Follow naming conventions and error handling patterns
-- Include comprehensive comments
-- Make sure memory is properly managed
+- Tuân theo naming conventions và error handling patterns
+- Bao gồm comments toàn diện
+- Đảm bảo memory được quản lý đúng cách
 ```
 
 ---
 
-## 📖 Learning Resources
+## 📖 Tài Nguyên Học Tập
 
-### Key Concepts:
-1. **Deadlock**: Situation where processes wait indefinitely for resources
-2. **Resource Allocation Graph**: Visual representation of resource dependencies
-3. **Cycle Detection**: Algorithm to find circular dependencies
-4. **Graph Traversal**: DFS, BFS techniques
+### Khái Niệm Chính:
+1. **Deadlock**: Tình huống các tiến trình chờ đợi vô hạn cho tài nguyên
+2. **Resource Allocation Graph**: Biểu diễn trực quan các phụ thuộc tài nguyên
+3. **Cycle Detection**: Thuật toán để tìm phụ thuộc vòng tròn
+4. **Graph Traversal**: Kỹ thuật DFS, BFS
 
-### Recommended Reading:
-- "Operating System Concepts" by Silberschatz (Chapter on Deadlocks)
-- Linux `/proc` filesystem documentation: `man 5 proc`
+### Tài Liệu Đề Xuất:
+- "Operating System Concepts" by Silberschatz (Chương về Deadlocks)
+- Tài liệu Linux `/proc` filesystem: `man 5 proc`
 - POSIX threads: `man pthreads`
-- C Programming: "The C Programming Language" by Kernighan & Ritchie
+- Lập Trình C: "The C Programming Language" by Kernighan & Ritchie
 
 ---
 
-## 🎯 Success Criteria
+## 🎯 Tiêu Chí Thành Công
 
-Your implementation should:
+Implementation của bạn nên:
 - ✅ Compile without warnings (`-Wall -Wextra`)
 - ✅ Handle all error conditions gracefully
 - ✅ No memory leaks (pass `valgrind`)
@@ -458,42 +458,42 @@ Your implementation should:
 
 ---
 
-## 👨‍💻 Author Notes
+## 👨‍💻 Ghi Chú Tác Giả
 
-This is an **educational project** for learning:
+Đây là một **dự án giáo dục** để học:
 - Operating Systems concepts (synchronization, deadlock)
 - C Systems Programming
 - Graph algorithms
 - Linux/Unix programming
 
-Focus on **correctness first**, then optimize if needed.
+Tập trung vào **correctness trước**, sau đó tối ưu nếu cần.
 
 ---
 
-## 📞 Support & Troubleshooting
+## 📞 Hỗ Trợ & Khắc Phục Sự Cố
 
-### Common Issues:
+### Vấn Đề Thường Gặp:
 
-**Q: "Permission denied" when reading `/proc/[PID]`**
-A: Some processes are owned by other users. Catch and skip these errors.
+**Q: "Permission denied" khi đọc `/proc/[PID]`**
+A: Một số tiến trình thuộc về người dùng khác. Bắt và bỏ qua các lỗi này.
 
-**Q: Valgrind shows memory leaks**
-A: Ensure all allocated memory is freed in cleanup functions.
+**Q: Valgrind hiển thị memory leaks**
+A: Đảm bảo tất cả memory được cấp phát được giải phóng trong cleanup functions.
 
-**Q: Graph not building correctly**
-A: Check that you're correctly parsing the `/proc` files.
+**Q: Graph không được xây dựng đúng**
+A: Kiểm tra rằng bạn đang parse đúng các file `/proc`.
 
-**Q: DFS not detecting cycles**
-A: Verify that:
-1. Color array is properly initialized
-2. Back edges are correctly identified
-3. All vertices are visited
+**Q: DFS không phát hiện chu trình**
+A: Xác minh rằng:
+1. Mảng Color được khởi tạo đúng cách
+2. Back edges được xác định đúng
+3. Tất cả vertices được thăm
 
 ---
 
 ## 📄 License
 
-This project is for educational purposes.
+Dự án này dành cho mục đích giáo dục.
 
 ---
 

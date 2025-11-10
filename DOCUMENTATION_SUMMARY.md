@@ -1,4 +1,4 @@
-# 🎯 HOÀN THÀNH - Bộ Tài Liệu Deadlock Detection System
+# 🎯 HOÀN THÀNH - Bộ Tài Liệu Hệ Thống Phát Hiện Deadlock
 
 Bạn đã nhận được **bộ hoàn chỉnh** để viết chương trình phát hiện Deadlock trên Cursor IDE.
 
@@ -8,33 +8,33 @@ Bạn đã nhận được **bộ hoàn chỉnh** để viết chương trình p
 
 ### Tài Liệu Hướng Dẫn:
 
-1. **📑 INDEX.md** - Danh mục & hướng dẫn sử dụng
-2. **🚀 QUICKSTART.md** - Bắt đầu nhanh (30 giây setup + 10 prompts)
-3. **📖 instruction.md** - Hướng dẫn chi tiết cho Cursor (15KB, 100+ trang)
-4. **🎯 cursor-rules.md** - Rules + 10 prompts sẵn sàng
-5. **📚 README-guide.md** - Tài liệu kiến trúc hệ thống
-6. **📋 OVERVIEW.md** - Tóm tắt & workflow
-7. **📄 FINAL-SUMMARY.md** - File này
+1. **📑 DOCUMENTATION_INDEX.md** - Danh mục & hướng dẫn sử dụng
+2. **🚀 GETTING_STARTED.md** - Bắt đầu nhanh (30 giây setup + 10 prompts)
+3. **📖 DEVELOPMENT_GUIDE.md** - Hướng dẫn chi tiết cho Cursor (15KB, 100+ trang)
+4. **🎯 CURSOR_SETUP.md** - Rules + 10 prompts sẵn sàng
+5. **📚 SYSTEM_ARCHITECTURE.md** - Tài liệu kiến trúc hệ thống
+6. **📋 PROJECT_OVERVIEW.md** - Tóm tắt & workflow
+7. **📄 DOCUMENTATION_SUMMARY.md** - File này
 
 ---
 
 ## 🎓 Nội Dung Mỗi File
 
-### 1. INDEX.md
+### 1. DOCUMENTATION_INDEX.md
 - Danh sách tất cả files
 - Khi nào dùng từng file
 - Recommended reading order
 - Cross-references
 - **→ Sử dụng để navigate**
 
-### 2. QUICKSTART.md
+### 2. GETTING_STARTED.md
 - Setup 30 giây
 - 10 prompts copy-paste sẵn
 - Verification checklist
 - Troubleshooting
 - **→ Bắt đầu ở đây!**
 
-### 3. instruction.md
+### 3. DEVELOPMENT_GUIDE.md
 - **IX phần** đầy đủ hướng dẫn
 - Quy tắc viết code (9 sections)
 - Mô tả từng module chi tiết
@@ -42,7 +42,7 @@ Bạn đã nhận được **bộ hoàn chỉnh** để viết chương trình p
 - Code examples & patterns
 - **→ Import vào Cursor làm system prompt**
 
-### 4. cursor-rules.md
+### 4. CURSOR_SETUP.md
 - **PHẦN 1:** 9 Cursor Rules (để tạo `.cursor/rules`)
 - **PHẦN 2:** 10 Prompts chi tiết (copy vào Cursor chat)
 - **PHẦN 3:** Integration checklist
@@ -50,7 +50,7 @@ Bạn đã nhận được **bộ hoàn chỉnh** để viết chương trình p
 - **PHẦN 5:** Quality verification
 - **→ Tạo `.cursor/rules` + copy prompts**
 
-### 5. README-guide.md
+### 5. SYSTEM_ARCHITECTURE.md
 - Sơ đồ kiến trúc hệ thống
 - 7 modules & chức năng
 - Data structures chi tiết
@@ -59,7 +59,7 @@ Bạn đã nhận được **bộ hoàn chỉnh** để viết chương trình p
 - I/O formats & examples
 - **→ Tài liệu tham khảo kiến trúc**
 
-### 6. OVERVIEW.md
+### 6. PROJECT_OVERVIEW.md
 - 30-giây setup
 - 10 prompts quick ref
 - Kiến trúc ngắn gọn
@@ -68,7 +68,7 @@ Bạn đã nhận được **bộ hoàn chỉnh** để viết chương trình p
 - Tips for Cursor
 - **→ Xem để hiểu toàn bộ**
 
-### 7. FINAL-SUMMARY.md (File này)
+### 7. DOCUMENTATION_SUMMARY.md (File này)
 - Tóm tắt hoàn thành
 - Workflow nhanh
 - Bắt đầu ngay
@@ -78,35 +78,35 @@ Bạn đã nhận được **bộ hoàn chỉnh** để viết chương trình p
 
 ## 🚀 Workflow Cơ Bản (Dễ Nhất)
 
-### Step 1: Đọc (10 phút)
+### Bước 1: Đọc (10 phút)
 ```
-1. Đọc INDEX.md (2 min) - hiểu structure
-2. Đọc OVERVIEW.md (5 min) - hiểu workflow
-3. Đọc QUICKSTART.md (3 min) - biết cách bắt đầu
+1. Đọc DOCUMENTATION_INDEX.md (2 phút) - hiểu structure
+2. Đọc PROJECT_OVERVIEW.md (5 phút) - hiểu workflow
+3. Đọc GETTING_STARTED.md (3 phút) - biết cách bắt đầu
 ```
 
-### Step 2: Setup (2 phút)
+### Bước 2: Setup (2 phút)
 ```bash
-# Command từ QUICKSTART.md
+# Lệnh từ GETTING_STARTED.md
 mkdir -p deadlock_detector/{src,test,obj,bin}
 cd deadlock_detector
 mkdir -p .cursor
 ```
 
-### Step 3: Tạo Rules (1 phút)
+### Bước 3: Tạo Rules (1 phút)
 - Tạo file `.cursor/rules`
-- Copy **PHẦN 1** từ `cursor-rules.md`
+- Sao chép **PHẦN 1** từ `CURSOR_SETUP.md`
 
-### Step 4: Generate Code (2-3 giờ)
+### Bước 4: Tạo Code (2-3 giờ)
 - Mở Cursor IDE
 - Open folder: `deadlock_detector/`
-- Copy **10 prompts** từ `QUICKSTART.md` hoặc `cursor-rules.md`
-- Generate code từ prompt 1 đến 10
+- Sao chép **10 prompts** từ `GETTING_STARTED.md` hoặc `CURSOR_SETUP.md`
+- Tạo code từ prompt 1 đến 10
 
-### Step 5: Build & Test (30 phút)
+### Bước 5: Build & Test (30 phút)
 ```bash
 make clean && make     # Compilation
-make test              # Run tests
+make test              # Chạy tests
 valgrind ...           # Memory check
 ```
 
@@ -115,10 +115,10 @@ valgrind ...           # Memory check
 ## 📋 10 Prompts (Sẵn Sàng)
 
 Prompts có sẵn trong **2 file** (nội dung giống nhau):
-- `QUICKSTART.md` - Prompts 1-10 (dạng simple)
-- `cursor-rules.md` - Phần 2 (dạng detailed)
+- `GETTING_STARTED.md` - Prompts 1-10 (dạng simple)
+- `CURSOR_SETUP.md` - PHẦN 2 (dạng detailed)
 
-### Thứ Tự Generate:
+### Thứ Tự Tạo:
 1️⃣ Headers (`.h` files)  
 2️⃣ Utility module  
 3️⃣ Process Monitor  
@@ -136,25 +136,25 @@ Prompts có sẵn trong **2 file** (nội dung giống nhau):
 
 ### Cách 1: Siêu Nhanh (5 phút)
 ```
-1. Đọc: QUICKSTART.md (4 min)
-2. Setup: mkdir + cd (1 min)
-3. Generate: Use prompts 1-10 (2-3 hours)
+1. Đọc: GETTING_STARTED.md (4 phút)
+2. Setup: mkdir + cd (1 phút)
+3. Tạo: Use prompts 1-10 (2-3 giờ)
 ```
 
 ### Cách 2: Hiểu Rõ (30 phút)
 ```
-1. Đọc: INDEX.md (2 min)
-2. Đọc: OVERVIEW.md (5 min)
-3. Đọc: README-guide.md (20 min)
-4. Đọc: QUICKSTART.md (3 min)
-5. Generate: Use prompts 1-10 (2-3 hours)
+1. Đọc: DOCUMENTATION_INDEX.md (2 phút)
+2. Đọc: PROJECT_OVERVIEW.md (5 phút)
+3. Đọc: SYSTEM_ARCHITECTURE.md (20 phút)
+4. Đọc: GETTING_STARTED.md (3 phút)
+5. Tạo: Use prompts 1-10 (2-3 giờ)
 ```
 
 ### Cách 3: Chi Tiết (2 giờ)
 ```
-1. Đọc: Tất cả 7 files (2 hours)
-2. Generate: Use prompts 1-10 (2-3 hours)
-3. Build & test (30 min)
+1. Đọc: Tất cả 7 files (2 giờ)
+2. Tạo: Use prompts 1-10 (2-3 giờ)
+3. Build & test (30 phút)
 ```
 
 ---
@@ -167,18 +167,18 @@ Sau khi chạy 10 prompts:
 deadlock_detector/
 ├── src/
 │   ├── config.h           (Constants)
-│   ├── utility.c/.h       (200 lines)
-│   ├── process_monitor.c/.h (250 lines)
-│   ├── resource_graph.c/.h (300 lines)
-│   ├── cycle_detection.c/.h (280 lines)
-│   ├── deadlock_detection.c/.h (250 lines)
-│   ├── output_handler.c/.h (300 lines)
-│   └── main.c             (300 lines)
+│   ├── utility.c/.h       (200 dòng)
+│   ├── process_monitor.c/.h (250 dòng)
+│   ├── resource_graph.c/.h (300 dòng)
+│   ├── cycle_detection.c/.h (280 dòng)
+│   ├── deadlock_detection.c/.h (250 dòng)
+│   ├── output_handler.c/.h (300 dòng)
+│   └── main.c             (300 dòng)
 ├── test/
-│   ├── test_graph.c       (150 lines)
-│   ├── test_cycle.c       (200 lines)
-│   └── test_system.c      (150 lines)
-├── Makefile               (100 lines)
+│   ├── test_graph.c       (150 dòng)
+│   ├── test_cycle.c       (200 dòng)
+│   └── test_system.c      (150 dòng)
+├── Makefile               (100 dòng)
 ├── bin/
 │   ├── deadlock_detector  (compiled)
 │   ├── test_graph
@@ -186,10 +186,10 @@ deadlock_detector/
 │   └── test_system
 └── obj/                   (object files)
 
-Total: ~3500 lines production code
-       ~500 lines test code
-Binary size: <100KB
-Compilation: <2 seconds
+Tổng: ~3500 dòng production code
+       ~500 dòng test code
+Kích thước binary: <100KB
+Thời gian biên dịch: <2 giây
 ```
 
 ---
@@ -198,12 +198,12 @@ Compilation: <2 seconds
 
 ### Compile & Test:
 ```bash
-✅ No compiler warnings
-✅ All tests passed
-✅ No memory leaks
-✅ Detects deadlocks correctly
-✅ Handles edge cases
-✅ Professional code quality
+✅ Không có compiler warnings
+✅ Tất cả tests pass
+✅ Không có memory leaks
+✅ Phát hiện deadlock đúng cách
+✅ Xử lý edge cases
+✅ Chất lượng code chuyên nghiệp
 ```
 
 ### Chương trình hoàn thành có:
@@ -225,12 +225,12 @@ Compilation: <2 seconds
 | Tổng files | 7 files (tài liệu) |
 | Dung lượng | ~50KB (tài liệu) |
 | Tổng prompt | 10 prompts |
-| Code production | ~3500 lines |
-| Code test | ~500 lines |
+| Code production | ~3500 dòng |
+| Code test | ~500 dòng |
 | Modules | 7 modules |
-| Time to generate | 2-3 hours |
-| Time to verify | 30 minutes |
-| Total time | 3-4 hours |
+| Thời gian tạo | 2-3 giờ |
+| Thời gian xác minh | 30 phút |
+| Tổng thời gian | 3-4 giờ |
 
 ---
 
@@ -250,16 +250,16 @@ Qua dự án này:
 ## 🚀 BẮT ĐẦU NGAY
 
 ### Hành động #1: Đọc (2-5 phút)
-→ **QUICKSTART.md** hoặc **OVERVIEW.md**
+→ **GETTING_STARTED.md** hoặc **PROJECT_OVERVIEW.md**
 
 ### Hành động #2: Setup (2 phút)
-→ Create `deadlock_detector/` folder
-→ Create `.cursor/rules`
+→ Tạo thư mục `deadlock_detector/`
+→ Tạo `.cursor/rules`
 
-### Hành động #3: Generate (2-3 giờ)
+### Hành động #3: Tạo (2-3 giờ)
 → Mở Cursor IDE
-→ Copy 10 prompts từ `QUICKSTART.md`
-→ Paste vào Cursor chat, one by one
+→ Sao chép 10 prompts từ `GETTING_STARTED.md`
+→ Paste vào Cursor chat, từng cái một
 
 ### Hành động #4: Build (30 phút)
 → `make clean && make`
@@ -274,17 +274,17 @@ Qua dự án này:
 ## 📍 File Priority
 
 **MUST READ (Bắt buộc):**
-1. ⭐ QUICKSTART.md - bắt đầu
-2. ⭐ cursor-rules.md - PHẦN 1 (rules) + PHẦN 2 (prompts)
-3. ⭐ instruction.md - import vào Cursor
+1. ⭐ GETTING_STARTED.md - bắt đầu
+2. ⭐ CURSOR_SETUP.md - PHẦN 1 (rules) + PHẦN 2 (prompts)
+3. ⭐ DEVELOPMENT_GUIDE.md - import vào Cursor
 
 **SHOULD READ (Nên đọc):**
-4. 📌 README-guide.md - kiến trúc
-5. 📌 OVERVIEW.md - workflow
+4. 📌 SYSTEM_ARCHITECTURE.md - kiến trúc
+5. 📌 PROJECT_OVERVIEW.md - workflow
 
 **CAN REFER (Có thể tham khảo):**
-6. 📌 INDEX.md - navigate
-7. 📌 FINAL-SUMMARY.md (file này)
+6. 📌 DOCUMENTATION_INDEX.md - navigate
+7. 📌 DOCUMENTATION_SUMMARY.md (file này)
 
 ---
 
@@ -305,11 +305,11 @@ Sau dự án, bạn sẽ có:
 
 ## 💡 Pro Tips
 
-1. **Read fast, code slow:** Đừng vội vã với tài liệu, tập trung vào code generation
-2. **Follow order:** Làm theo 10 prompts theo thứ tự
-3. **Test early:** Chạy `make` sau mỗi 2-3 prompts
-4. **Fix issues:** Đừng tích lũy lỗi, fix ngay khi phát hiện
-5. **Use valgrind:** Memory checking là quan trọng
+1. **Đọc nhanh, code chậm:** Đừng vội vã với tài liệu, tập trung vào code generation
+2. **Làm theo thứ tự:** Làm theo 10 prompts theo thứ tự
+3. **Test sớm:** Chạy `make` sau mỗi 2-3 prompts
+4. **Sửa vấn đề:** Đừng tích lũy lỗi, sửa ngay khi phát hiện
+5. **Sử dụng valgrind:** Memory checking là quan trọng
 
 ---
 
@@ -317,12 +317,12 @@ Sau dự án, bạn sẽ có:
 
 | Vấn Đề | Xem File |
 |--------|----------|
-| Không biết bắt đầu | QUICKSTART.md |
-| Không hiểu architecture | README-guide.md |
-| Tìm prompt cụ thể | cursor-rules.md Phần 2 |
-| Compilation error | instruction.md Error Handling |
-| Test failure | QUICKSTART.md Troubleshooting |
-| Memory leak | QUICKSTART.md Troubleshooting |
+| Không biết bắt đầu | GETTING_STARTED.md |
+| Không hiểu architecture | SYSTEM_ARCHITECTURE.md |
+| Tìm prompt cụ thể | CURSOR_SETUP.md PHẦN 2 |
+| Compilation error | DEVELOPMENT_GUIDE.md Error Handling |
+| Test failure | GETTING_STARTED.md Troubleshooting |
+| Memory leak | GETTING_STARTED.md Troubleshooting |
 
 ---
 
@@ -331,21 +331,21 @@ Sau dự án, bạn sẽ có:
 **Bây giờ bạn có mọi thứ cần để tạo chương trình phát hiện Deadlock.**
 
 ### Bước tiếp theo:
-1. Đọc **QUICKSTART.md** (5 phút)
+1. Đọc **GETTING_STARTED.md** (5 phút)
 2. Setup folder (2 phút)  
-3. Bắt đầu generate code!
+3. Bắt đầu tạo code!
 
 ---
 
 ## 📊 Final Checklist
 
-- [ ] Downloaded all 7 files
-- [ ] Read QUICKSTART.md or OVERVIEW.md
-- [ ] Understood the 10-prompt workflow
-- [ ] Created project directory
-- [ ] Ready to use Cursor IDE
-- [ ] Terminal ready for `make`
-- [ ] ~3-4 hours available
+- [ ] Đã tải tất cả 7 files
+- [ ] Đọc GETTING_STARTED.md hoặc PROJECT_OVERVIEW.md
+- [ ] Hiểu workflow 10-prompt
+- [ ] Đã tạo thư mục dự án
+- [ ] Sẵn sàng sử dụng Cursor IDE
+- [ ] Terminal sẵn sàng cho `make`
+- [ ] Có ~3-4 giờ rảnh
 
 **Nếu tất cả ✅, bạn sẵn sàng!**
 
@@ -361,19 +361,19 @@ Sau dự án, bạn sẽ có:
 
 ## 📞 One More Thing
 
-Tất cả files được tạo bằng **Perplexity AI** theo roadmap từ `1.-Road-map.md`.
+Tất cả files được tạo để hỗ trợ phát triển deadlock detector.
 
 Workflow của bạn:
 ```
-Your Request (Deadlock detector + Cursor)
+Yêu Cầu Của Bạn (Deadlock detector + Cursor)
          ↓
-My Research (Studied the roadmap file)
+Nghiên Cứu (Studied the roadmap file)
          ↓
-Solution Generated (7 complete documentation files)
+Giải Pháp Được Tạo (7 complete documentation files)
          ↓
-You Take Action (Follow QUICKSTART.md)
+Bạn Hành Động (Follow GETTING_STARTED.md)
          ↓
-Success! ✨ (Professional deadlock detector)
+Thành Công! ✨ (Professional deadlock detector)
 ```
 
-**Ready? Go open QUICKSTART.md now!** 🎯
+**Ready? Go open GETTING_STARTED.md now!** 🎯

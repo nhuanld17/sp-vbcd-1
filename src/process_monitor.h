@@ -269,6 +269,20 @@ int parse_system_locks(FileLockInfo** locks, int* count);
 int get_pipe_info_from_fd(pid_t pid, int fd, unsigned long* inode, int* is_read_end);
 
 /*
+ * get_file_path_from_fd - Get file path from file descriptor
+ * @pid: Process ID
+ * @fd: File descriptor number
+ * @file_path: Output parameter for file path (must be MAX_PATH_LEN bytes)
+ * @inode: Output parameter for file inode (optional, can be NULL)
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Reads /proc/[PID]/fd/[FD] symlink to get file path and inode.
+ *              Extracts inode from /proc/[PID]/fdinfo/[FD] if needed.
+ *              Time complexity: O(1) file read
+ * Error handling: Returns error if FD access denied or not a regular file
+ */
+int get_file_path_from_fd(pid_t pid, int fd, char* file_path, unsigned long* inode);
+
+/*
  * detect_pipe_dependencies - Detect pipe relationships between processes
  * @all_pipes: Output array of PipeInfo structures for all processes
  * @pipe_count: Output parameter for number of pipes found

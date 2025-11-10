@@ -16,6 +16,9 @@
 #include <time.h>
 #include <unistd.h>
 
+/* Forward declarations for utility functions */
+extern char* str_dup(const char* str);
+
 /* =============================================================================
  * HELPER FUNCTIONS
  * =============================================================================
@@ -1101,61 +1104,193 @@ int analyze_pipe_and_lock_dependencies(ProcessResourceInfo* procs, int num_procs
         
         /* Step 4: Analyze file lock dependencies */
         if (proc->is_blocked_on_lock && system_locks != NULL && system_lock_count > 0) {
-            /* Find locks that this process is waiting for */
+            /* Get file descriptors for this process to find which files it's trying to lock */
+            int* fds = NULL;
+            int fd_count = 0;
+            if (get_open_files((pid_t)proc->pid, &fds, &fd_count) == SUCCESS && fds != NULL) {
+                /* For each file descriptor, get file path and inode */
+                for (int fd_idx = 0; fd_idx < fd_count; fd_idx++) {
+                    char file_path[MAX_PATH_LEN];
+                    unsigned long file_inode = 0;
+                    
+                    if (get_file_path_from_fd((pid_t)proc->pid, fds[fd_idx], file_path, &file_inode) == SUCCESS) {
+                        /* Find locks that match this file (by path or inode) */
+                        for (int j = 0; j < system_lock_count; j++) {
+                            FileLockInfo* lock = &system_locks[j];
+                            
+                            /* Skip locks held by this process */
+                            if (lock->pid == proc->pid) {
+                                continue;
+                            }
+                            
+                            /* Match by file path or inode */
+                            int matches = 0;
+                            if (strlen(file_path) > 0 && strlen(lock->file_path) > 0) {
+                                if (strcmp(file_path, lock->file_path) == 0) {
+                                    matches = 1;
+                                }
+                            }
+                            if (!matches && file_inode > 0 && lock->inode > 0) {
+                                if (file_inode == lock->inode) {
+                                    matches = 1;
+                                }
+                            }
+                            
+                            if (matches) {
+                                /* This process is waiting for this lock */
+                                int lock_resource_id = lock->lock_id;
+                                
+                                /* Add to waiting resources */
+                                if (proc->waiting_resources == NULL) {
+                                    proc->waiting_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
+                                    proc->num_waiting = 0;
+                                }
+                                
+                                if (proc->num_waiting < MAX_RESOURCES_PER_PROCESS) {
+                                    /* Check if resource already in array */
+                                    int res_found = 0;
+                                    for (int k = 0; k < proc->num_waiting; k++) {
+                                        if (proc->waiting_resources[k] == lock_resource_id) {
+                                            res_found = 1;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!res_found) {
+                                        proc->waiting_resources[proc->num_waiting++] = lock_resource_id;
+                                        
+                                        /* Add waiting file */
+                                        if (proc->waiting_files == NULL) {
+                                            proc->waiting_files = (char**)safe_malloc(sizeof(char*) * MAX_RESOURCES_PER_PROCESS);
+                                            proc->num_waiting_files = 0;
+                                        }
+                                        
+                                        if (proc->num_waiting_files < MAX_RESOURCES_PER_PROCESS) {
+                                            if (strlen(lock->file_path) > 0) {
+                                                proc->waiting_files[proc->num_waiting_files] = str_dup(lock->file_path);
+                                            } else {
+                                                char lock_file_str[64];
+                                                snprintf(lock_file_str, sizeof(lock_file_str), "lock_%d", lock->lock_id);
+                                                proc->waiting_files[proc->num_waiting_files] = str_dup(lock_file_str);
+                                            }
+                                            proc->num_waiting_files++;
+                                        }
+                                        
+                                        /* Find process holding the lock and add to waiting_on_pids */
+                                        for (int k = 0; k < num_procs; k++) {
+                                            if (procs[k].pid == lock->pid) {
+                                                /* Add lock->pid to waiting_on_pids */
+                                                if (proc->waiting_on_pids == NULL) {
+                                                    proc->waiting_on_pids = (int*)safe_malloc(sizeof(int) * MAX_WAITING_PIDS);
+                                                    proc->num_waiting_on_pids = 0;
+                                                }
+                                                
+                                                if (proc->num_waiting_on_pids < MAX_WAITING_PIDS) {
+                                                    int pid_found = 0;
+                                                    for (int m = 0; m < proc->num_waiting_on_pids; m++) {
+                                                        if (proc->waiting_on_pids[m] == lock->pid) {
+                                                            pid_found = 1;
+                                                            break;
+                                                        }
+                                                    }
+                                                    
+                                                    if (!pid_found) {
+                                                        proc->waiting_on_pids[proc->num_waiting_on_pids++] = lock->pid;
+                                                    }
+                                                }
+                                                
+                                                /* Add lock as held resource for the process holding it */
+                                                if (procs[k].held_resources == NULL) {
+                                                    procs[k].held_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
+                                                    procs[k].num_held = 0;
+                                                }
+                                                
+                                                if (procs[k].num_held < MAX_RESOURCES_PER_PROCESS) {
+                                                    int held_found = 0;
+                                                    for (int m = 0; m < procs[k].num_held; m++) {
+                                                        if (procs[k].held_resources[m] == lock_resource_id) {
+                                                            held_found = 1;
+                                                            break;
+                                                        }
+                                                    }
+                                                    
+                                                    if (!held_found) {
+                                                        procs[k].held_resources[procs[k].num_held++] = lock_resource_id;
+                                                        
+                                                        /* Add held file */
+                                                        if (procs[k].held_files == NULL) {
+                                                            procs[k].held_files = (char**)safe_malloc(sizeof(char*) * MAX_RESOURCES_PER_PROCESS);
+                                                            procs[k].num_held_files = 0;
+                                                        }
+                                                        
+                                                        if (procs[k].num_held_files < MAX_RESOURCES_PER_PROCESS) {
+                                                            if (strlen(lock->file_path) > 0) {
+                                                                procs[k].held_files[procs[k].num_held_files] = str_dup(lock->file_path);
+                                                            } else {
+                                                                char lock_file_str[64];
+                                                                snprintf(lock_file_str, sizeof(lock_file_str), "lock_%d", lock->lock_id);
+                                                                procs[k].held_files[procs[k].num_held_files] = str_dup(lock_file_str);
+                                                            }
+                                                            procs[k].num_held_files++;
+                                                        }
+                                                    }
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                free(fds);
+            }
+        }
+        
+        /* Step 5: Also check for processes that hold locks but are blocked waiting for other locks */
+        /* This handles the case where process holds lock1 and waits for lock2 */
+        if (system_locks != NULL && system_lock_count > 0) {
+            /* Find all locks held by this process */
             for (int j = 0; j < system_lock_count; j++) {
                 FileLockInfo* lock = &system_locks[j];
-                
-                /* Check if this lock is blocking (WRITE lock) */
-                if (lock->is_blocking && lock->pid != proc->pid) {
-                    /* Check if process is blocked waiting for this lock */
-                    /* We need to match based on inode or file path */
-                    /* For now, add all blocking locks as waiting resources */
-                    
+                if (lock->pid == proc->pid) {
+                    /* Process holds this lock - add to held resources if not already there */
                     int lock_resource_id = lock->lock_id;
                     
-                    /* Add to waiting resources */
-                    if (proc->waiting_resources == NULL) {
-                        proc->waiting_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
-                        proc->num_waiting = 0;
+                    if (proc->held_resources == NULL) {
+                        proc->held_resources = (int*)safe_malloc(sizeof(int) * MAX_RESOURCES_PER_PROCESS);
+                        proc->num_held = 0;
                     }
                     
-                    if (proc->num_waiting < MAX_RESOURCES_PER_PROCESS) {
-                        /* Check if resource already in array */
-                        int res_found = 0;
-                        for (int k = 0; k < proc->num_waiting; k++) {
-                            if (proc->waiting_resources[k] == lock_resource_id) {
-                                res_found = 1;
+                    if (proc->num_held < MAX_RESOURCES_PER_PROCESS) {
+                        int held_found = 0;
+                        for (int k = 0; k < proc->num_held; k++) {
+                            if (proc->held_resources[k] == lock_resource_id) {
+                                held_found = 1;
                                 break;
                             }
                         }
                         
-                        if (!res_found) {
-                            proc->waiting_resources[proc->num_waiting++] = lock_resource_id;
+                        if (!held_found) {
+                            proc->held_resources[proc->num_held++] = lock_resource_id;
                             
-                            /* Find process holding the lock and add to waiting_on_pids */
-                            for (int k = 0; k < num_procs; k++) {
-                                if (procs[k].pid == lock->pid) {
-                                    /* Add lock->pid to waiting_on_pids */
-                                    if (proc->waiting_on_pids == NULL) {
-                                        proc->waiting_on_pids = (int*)safe_malloc(sizeof(int) * MAX_WAITING_PIDS);
-                                        proc->num_waiting_on_pids = 0;
-                                    }
-                                    
-                                    if (proc->num_waiting_on_pids < MAX_WAITING_PIDS) {
-                                        int pid_found = 0;
-                                        for (int m = 0; m < proc->num_waiting_on_pids; m++) {
-                                            if (proc->waiting_on_pids[m] == lock->pid) {
-                                                pid_found = 1;
-                                                break;
-                                            }
-                                        }
-                                        
-                                        if (!pid_found) {
-                                            proc->waiting_on_pids[proc->num_waiting_on_pids++] = lock->pid;
-                                        }
-                                    }
-                                    break;
+                            /* Add held file */
+                            if (proc->held_files == NULL) {
+                                proc->held_files = (char**)safe_malloc(sizeof(char*) * MAX_RESOURCES_PER_PROCESS);
+                                proc->num_held_files = 0;
+                            }
+                            
+                            if (proc->num_held_files < MAX_RESOURCES_PER_PROCESS) {
+                                if (strlen(lock->file_path) > 0) {
+                                    proc->held_files[proc->num_held_files] = str_dup(lock->file_path);
+                                } else {
+                                    char lock_file_str[64];
+                                    snprintf(lock_file_str, sizeof(lock_file_str), "lock_%d", lock->lock_id);
+                                    proc->held_files[proc->num_held_files] = str_dup(lock_file_str);
                                 }
+                                proc->num_held_files++;
                             }
                         }
                     }

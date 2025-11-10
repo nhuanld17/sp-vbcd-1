@@ -9,7 +9,7 @@ Xây dựng chương trình C phát hiện **Deadlock** trong hệ thống **Uni
 
 ---
 
-## II. YÊINFORMATICYÊU CẤU TRÚC DỰ ÁN
+## II. YÊU CẦU CẤU TRÚC DỰ ÁN
 
 ### Các Module Chính:
 ```
@@ -51,13 +51,13 @@ deadlock_detector/
 - **Function header comment**:
 ```c
 /*
- * function_name: Brief description of what this function does
- * @param1_name: Description of first parameter
- * @param2_name: Description of second parameter
- * @return: Description of return value
- * Description: Detailed explanation if needed, including algorithms used,
- *              time complexity, special cases to handle
- * Error handling: How errors are reported
+ * function_name: Mô tả ngắn gọn về chức năng của function này
+ * @param1_name: Mô tả tham số đầu tiên
+ * @param2_name: Mô tả tham số thứ hai
+ * @return: Mô tả giá trị trả về
+ * Description: Giải thích chi tiết nếu cần, bao gồm các thuật toán sử dụng,
+ *              độ phức tạp thời gian, các trường hợp đặc biệt cần xử lý
+ * Error handling: Cách báo lỗi
  */
 ```
 
@@ -89,7 +89,7 @@ if (state->color[neighbor] == GRAY) {
 void* safe_malloc(size_t size) {
     void* ptr = malloc(size);
     if (!ptr) {
-        fprintf(stderr, "Error: Out of memory\n");
+        fprintf(stderr, "Lỗi: Hết bộ nhớ\n");
         exit(ERROR_OUT_OF_MEMORY);
     }
     return ptr;
@@ -99,7 +99,7 @@ void* safe_malloc(size_t size) {
 FILE* f = fopen(path, "r");
 if (!f) {
     if (errno == ENOENT) {
-        error_log("File not found: %s", path);
+        error_log("Không tìm thấy file: %s", path);
         return ERROR_FILE_NOT_FOUND;
     }
     // ... xử lý các lỗi khác
@@ -116,7 +116,7 @@ void cleanup_graph(ResourceGraph* graph) {
     
     free(graph->processes);
     free(graph->resources);
-    // ... free other resources
+    // ... giải phóng các tài nguyên khác
     free(graph);
 }
 ```
@@ -406,16 +406,16 @@ typedef struct {
 } CommandLineArgs;
 
 void print_usage(const char* program_name) {
-    printf("Usage: %s [OPTIONS]\n", program_name);
-    printf("Options:\n");
-    printf("  -h, --help              Show this help message\n");
-    printf("  -v, --verbose           Verbose output\n");
-    printf("  -c, --continuous        Continuous monitoring\n");
-    printf("  -i, --interval SEC      Monitoring interval (default: %d)\n", 
+    printf("Cách sử dụng: %s [TÙY CHỌN]\n", program_name);
+    printf("Tùy chọn:\n");
+    printf("  -h, --help              Hiển thị thông báo trợ giúp này\n");
+    printf("  -v, --verbose           Output chi tiết\n");
+    printf("  -c, --continuous        Giám sát liên tục\n");
+    printf("  -i, --interval SEC      Khoảng thời gian giám sát (mặc định: %d)\n", 
            DEFAULT_INTERVAL);
-    printf("  -f, --format FORMAT     Output format: text, json, verbose\n");
-    printf("  -o, --output FILE       Output to file\n");
-    printf("  --version               Show version\n");
+    printf("  -f, --format FORMAT     Định dạng output: text, json, verbose\n");
+    printf("  -o, --output FILE       Output vào file\n");
+    printf("  --version               Hiển thị phiên bản\n");
 }
 
 int parse_arguments(int argc, char** argv, CommandLineArgs* args) {
@@ -427,7 +427,7 @@ int parse_arguments(int argc, char** argv, CommandLineArgs* args) {
     
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            return -1;  // Signal to print usage
+            return -1;  // Tín hiệu để in usage
         }
         else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             args->verbose = 1;
@@ -437,25 +437,25 @@ int parse_arguments(int argc, char** argv, CommandLineArgs* args) {
         }
         else if (strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "--interval") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "Error: -i requires an argument\n");
+                fprintf(stderr, "Lỗi: -i yêu cầu một đối số\n");
                 return -2;
             }
             args->interval = atoi(argv[++i]);
             if (args->interval <= 0) {
-                fprintf(stderr, "Error: interval must be positive\n");
+                fprintf(stderr, "Lỗi: interval phải là số dương\n");
                 return -2;
             }
         }
         else if (strcmp(argv[i], "-f") == 0 || strcmp(argv[i], "--format") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "Error: -f requires an argument\n");
+                fprintf(stderr, "Lỗi: -f yêu cầu một đối số\n");
                 return -2;
             }
             strncpy(args->output_format, argv[++i], sizeof(args->output_format) - 1);
         }
         else if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "Error: -o requires an argument\n");
+                fprintf(stderr, "Lỗi: -o yêu cầu một đối số\n");
                 return -2;
             }
             strncpy(args->output_file, argv[++i], sizeof(args->output_file) - 1);
@@ -465,7 +465,7 @@ int parse_arguments(int argc, char** argv, CommandLineArgs* args) {
             return -3;
         }
         else {
-            fprintf(stderr, "Error: Unknown option %s\n", argv[i]);
+            fprintf(stderr, "Lỗi: Tùy chọn không xác định %s\n", argv[i]);
             return -2;
         }
     }
@@ -487,21 +487,21 @@ int main(int argc, char** argv) {
     }
     
     if (args.verbose) {
-        info_log("Deadlock Detection System Started");
-        info_log("Format: %s, Continuous: %s, Interval: %d seconds",
+        info_log("Hệ Thống Phát Hiện Deadlock Đã Khởi Động");
+        info_log("Định dạng: %s, Liên tục: %s, Khoảng thời gian: %d giây",
                 args.output_format, 
-                args.continuous_monitor ? "yes" : "no",
+                args.continuous_monitor ? "có" : "không",
                 args.interval);
     }
     
-    // Main detection loop
+    // Vòng lặp phát hiện chính
     do {
         // 1. Thu thập thông tin tiến trình
         int num_procs;
         pid_t* pids = get_all_processes(&num_procs);
         
         if (args.verbose) {
-            info_log("Collected %d processes", num_procs);
+            info_log("Đã thu thập %d tiến trình", num_procs);
         }
         
         // 2. Xây dựng process resource info
@@ -516,7 +516,7 @@ int main(int argc, char** argv) {
         int deadlock_status = detect_deadlock_in_system(procs, num_procs, report);
         
         if (deadlock_status) {
-            info_log("DEADLOCK DETECTED!");
+            info_log("ĐÃ PHÁT HIỆN DEADLOCK!");
             OutputFormat fmt;
             if (strcmp(args.output_format, "json") == 0) {
                 fmt = FORMAT_JSON;
@@ -532,7 +532,7 @@ int main(int argc, char** argv) {
                 display_deadlock_report(report, fmt);
             }
         } else {
-            info_log("No deadlock detected");
+            info_log("Không phát hiện deadlock");
         }
         
         // Cleanup
@@ -567,7 +567,7 @@ TEST_DIR := test
 # Source files
 SRCS := $(wildcard $(SRC_DIR)/*.c)
 OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
-OBJS := $(filter-out $(OBJ_DIR)/main.o,$(OBJS))  # Exclude main.o from library
+OBJS := $(filter-out $(OBJ_DIR)/main.o,$(OBJS))  # Loại trừ main.o khỏi library
 
 # Test files
 TEST_SRCS := $(wildcard $(TEST_DIR)/*.c)
@@ -585,7 +585,7 @@ $(OBJ_DIR) $(BIN_DIR):
 # Main executable
 $(TARGET): $(OBJ_DIR) $(BIN_DIR) $(OBJ_DIR)/main.o $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJ_DIR)/main.o $(OBJS) $(LDFLAGS)
-	@echo "Build successful: $(TARGET)"
+	@echo "Build thành công: $(TARGET)"
 
 # Compile source files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
@@ -593,9 +593,9 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 
 # Test targets
 test: $(TESTS)
-	@echo "Running tests..."
+	@echo "Đang chạy tests..."
 	@for test in $(TESTS); do \
-		echo "Running $$test..."; \
+		echo "Đang chạy $$test..."; \
 		./$$test; \
 	done
 
@@ -605,18 +605,18 @@ $(BIN_DIR)/%: $(TEST_DIR)/%.c $(OBJS)
 # Cleaning
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
-	@echo "Clean completed"
+	@echo "Đã hoàn thành clean"
 
 # Phony targets
 .PHONY: all test clean
 
 # Help
 help:
-	@echo "Available targets:"
-	@echo "  all    - Build the main executable"
-	@echo "  test   - Run unit tests"
-	@echo "  clean  - Remove build artifacts"
-	@echo "  help   - Show this help message"
+	@echo "Các targets có sẵn:"
+	@echo "  all    - Build main executable"
+	@echo "  test   - Chạy unit tests"
+	@echo "  clean  - Xóa build artifacts"
+	@echo "  help   - Hiển thị thông báo trợ giúp này"
 ```
 
 ---
@@ -631,23 +631,23 @@ help:
 ### **Rule 2: Cycle Detection - Thuật Toán Chính**
 Cursor sẽ ưu tiên implement **DFS-based cycle detection**:
 ```
-1. Initialize all vertices as WHITE (unvisited)
-2. For each unvisited vertex:
-   a. Call DFS_VISIT(vertex)
-   b. In DFS_VISIT:
-      - Mark vertex as GRAY (being processed)
-      - For each adjacent vertex:
-        * If WHITE: recursively call DFS_VISIT
-        * If GRAY: Found cycle! Extract and return
-      - Mark vertex as BLACK (completed)
-3. Return all cycles found
+1. Khởi tạo tất cả vertices là WHITE (chưa thăm)
+2. Với mỗi vertex chưa thăm:
+   a. Gọi DFS_VISIT(vertex)
+   b. Trong DFS_VISIT:
+      - Đánh dấu vertex là GRAY (đang xử lý)
+      - Với mỗi adjacent vertex:
+        * Nếu WHITE: đệ quy gọi DFS_VISIT
+        * Nếu GRAY: Tìm thấy cycle! Trích xuất và trả về
+      - Đánh dấu vertex là BLACK (đã xong)
+3. Trả về tất cả cycles tìm được
 ```
 
 ### **Rule 3: /proc Filesystem Parsing**
 - `/proc/[PID]/status`: Lấy Name, State, Parent PID
 - `/proc/[PID]/fd/`: Đọc tất cả open file descriptors
 - `/proc/[PID]/locks`: Lấy file locks nếu có
-- **Always check if process exists trước khi access**
+- **Luôn kiểm tra process có tồn tại trước khi truy cập**
 
 ### **Rule 4: Error Handling Consistency**
 Mọi function return:
@@ -657,9 +657,9 @@ Mọi function return:
 
 ### **Rule 5: Testing Requirements**
 Cursor sẽ generate test cases cho:
-1. **No deadlock scenario**: Các process không có circular dependency
-2. **Simple deadlock**: 2 processes, 2 resources, rõ ràng
-3. **Complex deadlock**: N processes, M resources, chu trình phức tạp
+1. **Không có deadlock**: Các process không có circular dependency
+2. **Deadlock đơn giản**: 2 processes, 2 resources, rõ ràng
+3. **Deadlock phức tạp**: N processes, M resources, chu trình phức tạp
 
 ---
 
@@ -701,9 +701,9 @@ Cursor sẽ generate test cases cho:
 
 ## IX. PERFORMANCE OPTIMIZATION HINTS
 
-1. **Caching**: Cache `/proc` reads để avoid repeated I/O
-2. **Graph representation**: Use adjacency list thay vì matrix cho sparse graphs
-3. **DFS optimization**: Sử dụng stack thay recursive nếu graph rất lớn
+1. **Caching**: Cache các lần đọc `/proc` để tránh I/O lặp lại
+2. **Biểu diễn graph**: Sử dụng adjacency list thay vì matrix cho sparse graphs
+3. **Tối ưu DFS**: Sử dụng stack thay vì recursive nếu graph rất lớn
 4. **Memory pool**: Pre-allocate structures cho frequent allocation/deallocation
 
 ---
@@ -767,24 +767,24 @@ strace -e open,read -o trace.txt ./bin/deadlock_detector
 
 ## XIII. FINAL NOTES FOR CURSOR
 
-### Context You Need to Know:
-- This is for a **Unix/Linux system programming course project**
-- Target: **Ubuntu Linux** with `/proc` filesystem
-- Focus: **Educational, correctness > performance**
-- Scope: **Single-threaded detection engine** (thread-safe where needed)
+### Ngữ Cảnh Bạn Cần Biết:
+- Đây là dự án cho **khóa học lập trình hệ thống Unix/Linux**
+- Mục tiêu: **Ubuntu Linux** với `/proc` filesystem
+- Tập trung: **Giáo dục, tính đúng đắn > hiệu suất**
+- Phạm vi: **Single-threaded detection engine** (thread-safe khi cần)
 
-### Code Quality Standards:
-- **No compiler warnings**: Use `-Wall -Wextra`
-- **Memory safe**: No leaks, proper bounds checking
-- **Well documented**: Every function has header comment
-- **Error resilient**: Handle edge cases gracefully
-- **Follows POSIX standards**: Use standard C99 + POSIX functions
+### Tiêu Chuẩn Chất Lượng Code:
+- **Không có compiler warnings**: Sử dụng `-Wall -Wextra`
+- **An toàn memory**: Không có leaks, kiểm tra bounds đúng cách
+- **Tài liệu hóa tốt**: Mỗi function có header comment
+- **Xử lý lỗi tốt**: Xử lý edge cases một cách graceful
+- **Tuân thủ POSIX standards**: Sử dụng C99 chuẩn + POSIX functions
 
-### Success Criteria:
-✅ Successfully detects deadlocks in test scenarios
-✅ Compiles without warnings
-✅ No memory leaks
-✅ Handles process termination gracefully
-✅ Generates readable output/reports
-✅ Well-structured, modular code
-✅ Comprehensive documentation & comments
+### Tiêu Chí Thành Công:
+✅ Phát hiện deadlock thành công trong các test scenarios
+✅ Compile không có warnings
+✅ Không có memory leaks
+✅ Xử lý process termination một cách graceful
+✅ Tạo output/reports dễ đọc
+✅ Code có cấu trúc tốt, modular
+✅ Tài liệu hóa & comments toàn diện

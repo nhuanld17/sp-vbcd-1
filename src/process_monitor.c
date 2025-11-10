@@ -853,8 +853,8 @@ int parse_system_locks(FileLockInfo** locks, int* count)
         FileLockInfo* lock = &(*locks)[idx];
         memset(lock, 0, sizeof(FileLockInfo));
         
-        /* Parse lock line format: "1: FLOCK  ADVISORY  WRITE 1234 00:12:345678 0 EOF" */
-        /* Format: lock_id: lock_type ADVISORY/MANDATORY READ/WRITE pid major:minor:inode start end */
+        /* Parse lock line format: "1: FLOCK  ADVISORY  WRITE 1234 00:12:345678 0 EOF [/path/to/file]" */
+        /* Format: lock_id: lock_type ADVISORY/MANDATORY READ/WRITE pid major:minor:inode start end [file_path] */
         int lock_id;
         char lock_type_str[16];
         char advisory_str[16];
@@ -863,11 +863,21 @@ int parse_system_locks(FileLockInfo** locks, int* count)
         unsigned int major, minor;
         unsigned long inode_val;
         unsigned long start_val, end_val;
+        char file_path_buf[MAX_PATH_LEN] = {0};
         
-        int parsed = sscanf(line, "%d: %15s %15s %15s %d %u:%u:%lu %lu %lu",
+        /* Try to parse with file path at the end */
+        int parsed = sscanf(line, "%d: %15s %15s %15s %d %u:%u:%lu %lu %lu %s",
+                           &lock_id, lock_type_str, advisory_str, rw_str,
+                           &pid_val, &major, &minor, &inode_val,
+                           &start_val, &end_val, file_path_buf);
+        
+        /* If file path not found, try without it */
+        if (parsed < 5) {
+            parsed = sscanf(line, "%d: %15s %15s %15s %d %u:%u:%lu %lu %lu",
                            &lock_id, lock_type_str, advisory_str, rw_str,
                            &pid_val, &major, &minor, &inode_val,
                            &start_val, &end_val);
+        }
         
         if (parsed >= 5) {
             lock->lock_id = lock_id;
@@ -876,6 +886,14 @@ int parse_system_locks(FileLockInfo** locks, int* count)
             lock->inode = inode_val;
             lock->start = start_val;
             lock->end = (parsed >= 10) ? end_val : 0;
+            
+            /* Copy file path if available */
+            if (parsed >= 11 && strlen(file_path_buf) > 0) {
+                strncpy(lock->file_path, file_path_buf, MAX_PATH_LEN - 1);
+                lock->file_path[MAX_PATH_LEN - 1] = '\0';
+            } else {
+                lock->file_path[0] = '\0';
+            }
             
             /* Determine if this lock might be blocking (WRITE locks can block) */
             if (strcmp(rw_str, "WRITE") == 0) {
@@ -954,6 +972,96 @@ int get_pipe_info_from_fd(pid_t pid, int fd, unsigned long* inode, int* is_read_
     
     /* Not a pipe */
     return ERROR_INVALID_FORMAT;
+}
+
+/*
+ * get_file_path_from_fd - Get file path from file descriptor
+ * @pid: Process ID
+ * @fd: File descriptor number
+ * @file_path: Output parameter for file path (must be MAX_PATH_LEN bytes)
+ * @inode: Output parameter for file inode (optional, can be NULL)
+ * @return: SUCCESS (0) on success, negative error code on failure
+ * Description: Reads /proc/[PID]/fd/[FD] symlink to get file path and inode.
+ *              Extracts inode from /proc/[PID]/fdinfo/[FD] if needed.
+ *              Time complexity: O(1) file read
+ * Error handling: Returns error if FD access denied or not a regular file
+ */
+int get_file_path_from_fd(pid_t pid, int fd, char* file_path, unsigned long* inode)
+{
+    if (file_path == NULL) {
+        return ERROR_INVALID_ARGUMENT;
+    }
+    
+    file_path[0] = '\0';
+    if (inode != NULL) {
+        *inode = 0;
+    }
+    
+    char fd_path[MAX_PATH_LEN];
+    int result = snprintf(fd_path, sizeof(fd_path), "%s/%d/fd/%d",
+                         PROC_BASE_PATH, (int)pid, fd);
+    if (result < 0 || (size_t)result >= sizeof(fd_path)) {
+        return ERROR_BUFFER_OVERFLOW;
+    }
+    
+    char link_target[MAX_PATH_LEN];
+    ssize_t link_len = readlink(fd_path, link_target, sizeof(link_target) - 1);
+    if (link_len < 0) {
+        if (errno == ENOENT) {
+            return ERROR_FILE_NOT_FOUND;
+        } else if (errno == EACCES) {
+            return ERROR_PERMISSION_DENIED;
+        } else {
+            return ERROR_SYSTEM_CALL_FAILED;
+        }
+    }
+    
+    link_target[link_len] = '\0';
+    
+    /* Check if it's a pipe or socket - skip those */
+    if (strncmp(link_target, "pipe:[", 6) == 0 ||
+        strncmp(link_target, "socket:[", 8) == 0 ||
+        strncmp(link_target, "anon_inode:", 11) == 0) {
+        return ERROR_INVALID_FORMAT;
+    }
+    
+    /* It's a regular file - copy path */
+    strncpy(file_path, link_target, MAX_PATH_LEN - 1);
+    file_path[MAX_PATH_LEN - 1] = '\0';
+    
+    /* Try to get inode from /proc/[PID]/fdinfo/[FD] */
+    if (inode != NULL) {
+        char fdinfo_path[MAX_PATH_LEN];
+        result = snprintf(fdinfo_path, sizeof(fdinfo_path), "%s/%d/fdinfo/%d",
+                         PROC_BASE_PATH, (int)pid, fd);
+        if (result >= 0 && (size_t)result < sizeof(fdinfo_path)) {
+            FILE* fdinfo_file = fopen(fdinfo_path, "r");
+            if (fdinfo_file != NULL) {
+                char line[MAX_LINE_LEN];
+                while (fgets(line, sizeof(line), fdinfo_file) != NULL) {
+                    /* Look for "ino:" line */
+                    if (strncmp(line, "ino:", 4) == 0) {
+                        unsigned long inode_val;
+                        if (sscanf(line, "ino: %lu", &inode_val) == 1) {
+                            *inode = inode_val;
+                            break;
+                        }
+                    }
+                }
+                fclose(fdinfo_file);
+            }
+        }
+        
+        /* If inode not found from fdinfo, try to get from stat */
+        if (*inode == 0 && strlen(file_path) > 0) {
+            struct stat st;
+            if (stat(file_path, &st) == 0) {
+                *inode = (unsigned long)st.st_ino;
+            }
+        }
+    }
+    
+    return SUCCESS;
 }
 
 /*
