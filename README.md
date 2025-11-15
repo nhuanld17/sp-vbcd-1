@@ -12,10 +12,11 @@ A comprehensive C-based deadlock detection system for Linux and WSL2 that monito
 6. [Testing Deadlock Detection](#testing-deadlock-detection)
 7. [Output Formats](#output-formats)
 8. [System Architecture](#system-architecture)
-9. [Development Guide](#development-guide)
-10. [Troubleshooting](#troubleshooting)
-11. [Project Structure](#project-structure)
-12. [Features and Limitations](#features-and-limitations)
+9. [Code Reading Guide](#code-reading-guide)
+10. [Development Guide](#development-guide)
+11. [Troubleshooting](#troubleshooting)
+12. [Project Structure](#project-structure)
+13. [Features and Limitations](#features-and-limitations)
 
 ---
 
@@ -996,6 +997,177 @@ Recommendations:
 
 **Time Complexity**: O(V+E)  
 **Space Complexity**: O(V)
+
+---
+
+## 📖 Code Reading Guide
+
+Để hiểu được dự án này, bạn nên đọc các file code theo thứ tự sau:
+
+### Thứ Tự Đọc Code (Từ Cơ Bản Đến Phức Tạp)
+
+#### **Bước 1: Đọc Constants & Utilities (Nền Tảng)**
+
+1. **`src/config.h`** (50-100 dòng)
+   - **Mục đích**: Định nghĩa tất cả constants, error codes, limits
+   - **Nội dung chính**:
+     - Error codes (`SUCCESS`, `ERROR_*`)
+     - Maximum sizes (`MAX_PROCESSES`, `MAX_EMAIL_RECIPIENTS_LEN`)
+     - Configuration constants
+   - **Tại sao đọc đầu tiên**: Hiểu được các giới hạn và error codes dùng trong toàn bộ project
+
+2. **`src/utility.h`** + **`src/utility.c`** (200-300 dòng)
+   - **Mục đích**: Các hàm helper cơ bản
+   - **Nội dung chính**:
+     - Memory management: `safe_malloc()`, `safe_free()`
+     - String operations: `str_trim()`, `str_split()`
+     - File I/O: `read_entire_file()`
+     - Logging macros: `error_log()`, `debug_log()`, `info_log()`
+   - **Tại sao đọc tiếp theo**: Các module khác đều dùng các hàm này
+
+#### **Bước 2: Đọc Process Monitoring (Thu Thập Dữ Liệu)**
+
+3. **`src/process_monitor.h`** + **`src/process_monitor.c`** (300-400 dòng)
+   - **Mục đích**: Đọc thông tin process từ `/proc` filesystem
+   - **Nội dung chính**:
+     - `get_all_processes()`: Liệt kê tất cả PIDs
+     - `get_process_info()`: Parse `/proc/[PID]/status`
+     - `get_process_resources()`: Xác định resources (pipes, file locks)
+     - `read_proc_file()`: Đọc file trong `/proc`
+   - **Tại sao đọc tiếp**: Đây là nguồn dữ liệu đầu vào cho toàn bộ hệ thống
+   - **Điểm quan trọng**: Hiểu cách parse `/proc` filesystem
+
+#### **Bước 3: Đọc Graph Data Structure (Cấu Trúc Dữ Liệu)**
+
+4. **`src/resource_graph.h`** + **`src/resource_graph.c`** (400-500 dòng)
+   - **Mục đích**: Xây dựng Resource Allocation Graph (RAG)
+   - **Nội dung chính**:
+     - `create_graph()`: Khởi tạo graph
+     - `add_request_edge()`: Thêm cạnh P→R (process chờ resource)
+     - `add_allocation_edge()`: Thêm cạnh R→P (resource được cấp phát)
+     - `free_graph()`: Cleanup memory
+   - **Tại sao đọc tiếp**: Graph là cấu trúc dữ liệu trung tâm
+   - **Điểm quan trọng**: Hiểu adjacency list representation
+
+#### **Bước 4: Đọc Cycle Detection (Thuật Toán Core)**
+
+5. **`src/cycle_detection.h`** + **`src/cycle_detection.c`** (300-400 dòng)
+   - **Mục đích**: Phát hiện chu trình trong graph bằng DFS
+   - **Nội dung chính**:
+     - `has_cycle()`: Điểm vào chính
+     - `dfs_visit()`: DFS đệ quy với 3-color marking
+     - `find_all_cycles()`: Tìm tất cả cycles
+     - `extract_cycle_path()`: Trích xuất đường đi chu trình
+   - **Tại sao đọc tiếp**: Đây là thuật toán core để phát hiện deadlock
+   - **Điểm quan trọng**: Hiểu DFS với WHITE/GRAY/BLACK marking
+
+#### **Bước 5: Đọc Deadlock Detection (Logic Chính)**
+
+6. **`src/deadlock_detection.h`** + **`src/deadlock_detection.c`** (500-600 dòng)
+   - **Mục đích**: Tích hợp tất cả modules, phát hiện deadlock
+   - **Nội dung chính**:
+     - `detect_deadlock_in_system()`: Hàm chính
+     - `build_rag_from_processes()`: Xây dựng RAG từ process info
+     - `analyze_cycles_for_deadlock()`: Phân tích cycles
+     - `generate_explanations()`: Tạo giải thích
+     - `generate_recommendations()`: Tạo khuyến nghị
+   - **Tại sao đọc tiếp**: Đây là module điều phối toàn bộ
+   - **Điểm quan trọng**: Hiểu workflow từ process → graph → cycle → deadlock
+
+#### **Bước 6: Đọc Output Handler (Hiển Thị Kết Quả)**
+
+7. **`src/output_handler.h`** + **`src/output_handler.c`** (400-500 dòng)
+   - **Mục đích**: Format và hiển thị kết quả
+   - **Nội dung chính**:
+     - `display_deadlock_report()`: Hàm chính
+     - `format_as_text()`: Format text
+     - `format_as_json()`: Format JSON
+     - `format_as_verbose()`: Format verbose
+   - **Tại sao đọc tiếp**: Hiểu cách output được tạo ra
+   - **Điểm quan trọng**: Hiểu 3 định dạng output
+
+#### **Bước 7: Đọc Email Alert (Tính Năng Phụ)**
+
+8. **`src/email_alert.h`** + **`src/email_alert.c`** (600-700 dòng)
+   - **Mục đích**: Gửi email khi phát hiện deadlock
+   - **Nội dung chính**:
+     - `email_alert_set_options()`: Cấu hình email
+     - `email_alert_handle_detection()`: Xử lý khi phát hiện deadlock
+     - `send_email_alert()`: Gửi email qua `mail` command
+     - `read_email_config()`: Đọc file `email.conf`
+     - `write_log_file()`: Ghi log file
+   - **Tại sao đọc tiếp**: Tính năng bổ sung, không ảnh hưởng đến core logic
+   - **Điểm quan trọng**: Hiểu cách tích hợp email vào detection flow
+
+#### **Bước 8: Đọc Main Entry Point (Tổng Hợp)**
+
+9. **`src/main.c`** (600-700 dòng)
+   - **Mục đích**: Entry point, CLI, điều phối toàn bộ
+   - **Nội dung chính**:
+     - `main()`: Entry point
+     - `parse_arguments()`: Parse command-line arguments
+     - `run_detection()`: Chạy một lần detection
+     - `setup_signal_handlers()`: Xử lý SIGINT
+     - `apply_email_configuration()`: Load email config
+   - **Tại sao đọc cuối**: Tổng hợp tất cả modules
+   - **Điểm quan trọng**: Hiểu flow từ CLI → detection → output
+
+### Tóm Tắt Thứ Tự Đọc
+
+```
+1. config.h                    (Constants & error codes)
+2. utility.h/c                 (Helper functions)
+3. process_monitor.h/c         (Data collection)
+4. resource_graph.h/c          (Data structure)
+5. cycle_detection.h/c         (Core algorithm)
+6. deadlock_detection.h/c      (Main logic)
+7. output_handler.h/c          (Output formatting)
+8. email_alert.h/c             (Email notifications)
+9. main.c                      (Entry point & orchestration)
+```
+
+### Thời Gian Ước Tính
+
+| File | Thời Gian Đọc | Độ Khó |
+|------|---------------|--------|
+| `config.h` | 5 phút | ⭐ Dễ |
+| `utility.h/c` | 15 phút | ⭐ Dễ |
+| `process_monitor.h/c` | 30 phút | ⭐⭐ Trung bình |
+| `resource_graph.h/c` | 30 phút | ⭐⭐ Trung bình |
+| `cycle_detection.h/c` | 45 phút | ⭐⭐⭐ Khó |
+| `deadlock_detection.h/c` | 45 phút | ⭐⭐⭐ Khó |
+| `output_handler.h/c` | 20 phút | ⭐ Dễ |
+| `email_alert.h/c` | 30 phút | ⭐⭐ Trung bình |
+| `main.c` | 30 phút | ⭐⭐ Trung bình |
+| **Tổng cộng** | **~4 giờ** | - |
+
+### Tips Đọc Code
+
+1. **Đọc header file trước** (`.h`), sau đó mới đọc implementation (`.c`)
+2. **Tập trung vào function signatures** trong header để hiểu interface
+3. **Đọc comments** - mỗi function đều có mô tả chi tiết
+4. **Trace function calls** - xem function nào gọi function nào
+5. **Hiểu data flow**: Process → Graph → Cycle → Deadlock → Output
+6. **Sử dụng IDE** để jump to definition và tìm references
+
+### Các Khái Niệm Quan Trọng Cần Hiểu
+
+- **Resource Allocation Graph (RAG)**: Graph có 2 loại vertices (Process, Resource)
+- **DFS Cycle Detection**: Thuật toán tìm chu trình với 3-color marking
+- **Deadlock Rule**: Cycle + single-instance resource = deadlock
+- **`/proc` filesystem**: Cách Linux expose process information
+- **Adjacency List**: Cách biểu diễn graph (không phải matrix)
+
+### Câu Hỏi Để Kiểm Tra Hiểu Biết
+
+Sau khi đọc xong, bạn nên trả lời được:
+
+1. ✅ Làm thế nào để lấy danh sách tất cả processes?
+2. ✅ RAG được xây dựng như thế nào?
+3. ✅ DFS phát hiện cycle như thế nào?
+4. ✅ Làm sao phân biệt deadlock chắc chắn vs tiềm năng?
+5. ✅ Email được gửi khi nào và như thế nào?
+6. ✅ Output được format như thế nào?
 
 ---
 
