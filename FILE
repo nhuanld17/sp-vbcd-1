@@ -1,0 +1,21 @@
+========================================
+    DEADLOCK DETECTION REPORT
+========================================
+
+Deadlock Detected: YES
+
+Deadlocked Processes (2):
+  PID 164,   PID 163
+
+Cycle Chains (4):
+  Cycle #1: P164
+  Cycle #2: P164
+  Cycle #3: P163 -> P164
+  Cycle #4: P163
+
+Recommendations:
+  1. Terminate one of the deadlocked processes: PID 164, PID 163. This will break the circular wait chain.
+  2. Review resource allocation policies to prevent circular dependencies.
+  3. Implement resource request timeouts to automatically break deadlocks.
+
+========================================

@@ -18,6 +18,7 @@
 #include "resource_graph.h"
 #include "deadlock_detection.h"
 #include "output_handler.h"
+#include "email_alert.h"
 
 /* =============================================================================
  * GLOBAL VARIABLES
@@ -37,6 +38,13 @@ typedef struct {
     int interval;                    /* Monitoring interval in seconds */
     char output_format[32];          /* Output format: text, json, verbose */
     char output_file[256];           /* Output file path (empty if stdout) */
+    int alert_email;                 /* Email alert enabled flag */
+    char email_recipients[MAX_EMAIL_RECIPIENTS_LEN];
+    char log_file[MAX_PATH_LEN];
+    char sender_name[MAX_SENDER_NAME_LEN];
+    char smtp_server[256];
+    int smtp_port;
+    char from_email[MAX_EMAIL_RECIPIENTS_LEN];
 } CommandLineArgs;
 
 /* =============================================================================
@@ -76,6 +84,63 @@ static int setup_signal_handlers(void)
     return SUCCESS;
 }
 
+static void apply_email_configuration(CommandLineArgs* args)
+{
+    if (args == NULL) {
+        return;
+    }
+
+    char config_path[MAX_PATH_LEN];
+    EmailConfig config;
+    int result = ERROR_FILE_NOT_FOUND;
+    
+    /* Try current working directory first (project directory) */
+    strncpy(config_path, "email.conf", sizeof(config_path) - 1);
+    config_path[sizeof(config_path) - 1] = '\0';
+    result = read_email_config(config_path, &config);
+    
+    /* If file not found in current directory, try home directory as fallback */
+    if (result != SUCCESS) {
+        const char* home_dir = getenv("HOME");
+        if (home_dir == NULL || home_dir[0] == '\0') {
+            home_dir = getenv("USERPROFILE"); /* Windows fallback */
+        }
+        
+        if (home_dir != NULL && home_dir[0] != '\0') {
+            snprintf(config_path, sizeof(config_path), "%s/.deadlock_detector/email.conf", home_dir);
+            result = read_email_config(config_path, &config);
+        }
+    }
+    
+    if (result != SUCCESS) {
+        return;
+    }
+
+    if (args->email_recipients[0] == '\0' && config.email_to[0] != '\0') {
+        strncpy(args->email_recipients, config.email_to, sizeof(args->email_recipients) - 1);
+        args->email_recipients[sizeof(args->email_recipients) - 1] = '\0';
+    }
+
+    if (args->sender_name[0] == '\0' && config.sender_name[0] != '\0') {
+        strncpy(args->sender_name, config.sender_name, sizeof(args->sender_name) - 1);
+        args->sender_name[sizeof(args->sender_name) - 1] = '\0';
+    }
+
+    if (args->smtp_server[0] == '\0' && config.smtp_server[0] != '\0') {
+        strncpy(args->smtp_server, config.smtp_server, sizeof(args->smtp_server) - 1);
+        args->smtp_server[sizeof(args->smtp_server) - 1] = '\0';
+    }
+
+    if (args->smtp_port == 0 && config.smtp_port > 0) {
+        args->smtp_port = config.smtp_port;
+    }
+
+    if (args->from_email[0] == '\0' && config.from_email[0] != '\0') {
+        strncpy(args->from_email, config.from_email, sizeof(args->from_email) - 1);
+        args->from_email[sizeof(args->from_email) - 1] = '\0';
+    }
+}
+
 /* =============================================================================
  * COMMAND-LINE ARGUMENT PARSING
  * =============================================================================
@@ -99,6 +164,12 @@ static void print_usage(const char* program_name)
            DEFAULT_MONITORING_INTERVAL);
     printf("  -f, --format FORMAT     Output format: text, json, verbose (default: text)\n");
     printf("  -o, --output FILE       Write output to file instead of stdout\n");
+    printf("      --alert TYPE        Alert mechanism (email or none)\n");
+    printf("      --email-to LIST     Comma-separated email recipients for alerts\n");
+    printf("      --log-file FILE     Append detection results to specified log file\n");
+    printf("      --smtp-server HOST  SMTP server hostname (e.g., smtp.gmail.com)\n");
+    printf("      --smtp-port PORT    SMTP server port (e.g., 25, 587)\n");
+    printf("      --from-email EMAIL  Sender email address\n");
     printf("  --version               Show version information\n");
     printf("\n");
     printf("Examples:\n");
@@ -140,6 +211,13 @@ static int parse_arguments(int argc, char** argv, CommandLineArgs* args)
     args->output_format[sizeof(args->output_format) - 1] = '\0';
     strncpy(args->output_file, "", sizeof(args->output_file) - 1);
     args->output_file[sizeof(args->output_file) - 1] = '\0';
+    args->alert_email = 0;
+    args->email_recipients[0] = '\0';
+    args->log_file[0] = '\0';
+    args->sender_name[0] = '\0';
+    args->smtp_server[0] = '\0';
+    args->smtp_port = 0;
+    args->from_email[0] = '\0';
     
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
@@ -182,6 +260,68 @@ static int parse_arguments(int argc, char** argv, CommandLineArgs* args)
             }
             strncpy(args->output_file, argv[++i], sizeof(args->output_file) - 1);
             args->output_file[sizeof(args->output_file) - 1] = '\0';
+        }
+        else if (strcmp(argv[i], "--alert") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: --alert requires an argument\n");
+                return ERROR_INVALID_ARGUMENT;
+            }
+            const char* alert_mode = argv[++i];
+            if (strcmp(alert_mode, "email") == 0) {
+                args->alert_email = 1;
+                fprintf(stderr, "[DEBUG] Alert type set to: email\n");
+            } else if (strcmp(alert_mode, "none") == 0) {
+                args->alert_email = 0;
+                fprintf(stderr, "[DEBUG] Alert type set to: none\n");
+            } else {
+                fprintf(stderr, "Error: Unsupported alert mode '%s'\n", alert_mode);
+                return ERROR_INVALID_ARGUMENT;
+            }
+        }
+        else if (strcmp(argv[i], "--email-to") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: --email-to requires an argument\n");
+                return ERROR_INVALID_ARGUMENT;
+            }
+            strncpy(args->email_recipients, argv[++i], sizeof(args->email_recipients) - 1);
+            args->email_recipients[sizeof(args->email_recipients) - 1] = '\0';
+            fprintf(stderr, "[DEBUG] Email recipients: %s\n", args->email_recipients);
+        }
+        else if (strcmp(argv[i], "--log-file") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: --log-file requires an argument\n");
+                return ERROR_INVALID_ARGUMENT;
+            }
+            strncpy(args->log_file, argv[++i], sizeof(args->log_file) - 1);
+            args->log_file[sizeof(args->log_file) - 1] = '\0';
+        }
+        else if (strcmp(argv[i], "--smtp-server") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: --smtp-server requires an argument\n");
+                return ERROR_INVALID_ARGUMENT;
+            }
+            strncpy(args->smtp_server, argv[++i], sizeof(args->smtp_server) - 1);
+            args->smtp_server[sizeof(args->smtp_server) - 1] = '\0';
+        }
+        else if (strcmp(argv[i], "--smtp-port") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: --smtp-port requires an argument\n");
+                return ERROR_INVALID_ARGUMENT;
+            }
+            int port = atoi(argv[++i]);
+            if (port <= 0 || port > 65535) {
+                fprintf(stderr, "Error: SMTP port must be between 1 and 65535\n");
+                return ERROR_INVALID_ARGUMENT;
+            }
+            args->smtp_port = port;
+        }
+        else if (strcmp(argv[i], "--from-email") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: --from-email requires an argument\n");
+                return ERROR_INVALID_ARGUMENT;
+            }
+            strncpy(args->from_email, argv[++i], sizeof(args->from_email) - 1);
+            args->from_email[sizeof(args->from_email) - 1] = '\0';
         }
         else {
             fprintf(stderr, "Error: Unknown option '%s'\n", argv[i]);
@@ -381,6 +521,43 @@ int main(int argc, char** argv)
     } else if (parse_result < 0) {
         return 1;
     }
+
+    apply_email_configuration(&args);
+
+    EmailAlertOptions alert_options;
+    memset(&alert_options, 0, sizeof(alert_options));
+    alert_options.enable_email = args.alert_email;
+    strncpy(alert_options.recipients, args.email_recipients,
+            sizeof(alert_options.recipients) - 1);
+    alert_options.recipients[sizeof(alert_options.recipients) - 1] = '\0';
+
+    strncpy(alert_options.log_file, args.log_file,
+            sizeof(alert_options.log_file) - 1);
+    alert_options.log_file[sizeof(alert_options.log_file) - 1] = '\0';
+
+    strncpy(alert_options.sender_name, args.sender_name,
+            sizeof(alert_options.sender_name) - 1);
+    alert_options.sender_name[sizeof(alert_options.sender_name) - 1] = '\0';
+
+    strncpy(alert_options.smtp_server, args.smtp_server,
+            sizeof(alert_options.smtp_server) - 1);
+    alert_options.smtp_server[sizeof(alert_options.smtp_server) - 1] = '\0';
+
+    alert_options.smtp_port = args.smtp_port;
+
+    strncpy(alert_options.from_email, args.from_email,
+            sizeof(alert_options.from_email) - 1);
+    alert_options.from_email[sizeof(alert_options.from_email) - 1] = '\0';
+
+    email_alert_set_options(&alert_options);
+    
+    fprintf(stderr, "[DEBUG] Email alert configuration:\n");
+    fprintf(stderr, "[DEBUG]   enable_email: %d\n", alert_options.enable_email);
+    fprintf(stderr, "[DEBUG]   recipients: '%s'\n", alert_options.recipients);
+    fprintf(stderr, "[DEBUG]   smtp_server: '%s'\n", alert_options.smtp_server);
+    fprintf(stderr, "[DEBUG]   smtp_port: %d\n", alert_options.smtp_port);
+    fprintf(stderr, "[DEBUG]   from_email: '%s'\n", alert_options.from_email);
+    fprintf(stderr, "[DEBUG]   log_file: '%s'\n", alert_options.log_file);
     
     /* Setup signal handlers for graceful shutdown */
     if (setup_signal_handlers() != SUCCESS) {

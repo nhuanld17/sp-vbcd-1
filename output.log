@@ -1,0 +1,47 @@
+[INFO] Deadlock Detection System Started
+[INFO] Version: 1.0.0
+[INFO] Format: text
+[INFO] Continuous: no
+
+[INFO] Collected 23 processes
+[INFO] Collected resource info for 23 processes
+[INFO] Analyzed pipe and lock dependencies
+[INFO] DEADLOCK DETECTED!
+========================================
+    DEADLOCK DETECTION REPORT
+========================================
+
+Summary:
+  Deadlock Detected: YES
+  Deadlocked Processes: 3
+  Cycles Found: 2
+  Processes Scanned: 23
+  Resources Found: 11
+  Detection Time: 2025-11-15 14:07:50
+
+Deadlocked Processes:
+----------------------------------------
+  PID 90
+  PID 91
+  PID 1277
+
+Wait Chains:
+----------------------------------------
+
+Cycle #1:
+  Path: 7 -> 9 -> 10 -> 8
+  Processes: PID 90, PID 91
+  Resources: RID 7, RID 2
+
+Cycle #2:
+  Path: 32 -> 33
+  Processes: PID 1277
+  Resources: RID 22153
+
+Recommendations:
+----------------------------------------
+  1. Terminate one of the deadlocked processes: PID 90, PID 91, PID 1277. This will break the circular wait chain.
+  2. Review resource allocation policies to prevent circular dependencies.
+  3. Implement resource request timeouts to automatically break deadlocks.
+========================================
+[INFO] Deadlock Detection System Stopped

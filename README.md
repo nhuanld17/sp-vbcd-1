@@ -6,15 +6,16 @@ A comprehensive C-based deadlock detection system for Linux and WSL2 that monito
 
 1. [Project Overview](#project-overview)
 2. [Requirements](#requirements)
-3. [Installation on Linux](#installation-on-linux)
-4. [Installation on WSL2 Ubuntu](#installation-on-wsl2-ubuntu)
-5. [Usage](#usage)
+3. [Installation](#installation)
+4. [Usage](#usage)
+5. [Email Alert Feature](#email-alert-feature)
 6. [Testing Deadlock Detection](#testing-deadlock-detection)
-7. [Demo Script](#demo-script)
-8. [Output Formats](#output-formats)
-9. [Troubleshooting](#troubleshooting)
-10. [Project Structure](#project-structure)
-11. [Features and Limitations](#features-and-limitations)
+7. [Output Formats](#output-formats)
+8. [System Architecture](#system-architecture)
+9. [Development Guide](#development-guide)
+10. [Troubleshooting](#troubleshooting)
+11. [Project Structure](#project-structure)
+12. [Features and Limitations](#features-and-limitations)
 
 ---
 
@@ -29,6 +30,7 @@ The Deadlock Detector is a system-level tool that monitors Linux processes and d
 - **File Lock Deadlock Detection**: Detects deadlocks involving `flock()` file locks
 - **Real-Time Monitoring**: Continuous monitoring mode with configurable intervals
 - **Multiple Output Formats**: Text, JSON, and verbose output formats
+- **Email Alert System**: Sends email notifications when deadlocks are detected
 - **Comprehensive Testing**: 116 unit tests, all passing
 - **Memory Safe**: Valgrind-clean with no memory leaks
 
@@ -60,6 +62,7 @@ The Deadlock Detector is a system-level tool that monitors Linux processes and d
 - `gcc` (GNU Compiler Collection) - version 7.0 or higher
 - `make` - Build automation tool
 - `valgrind` - Memory leak detection (optional, for testing)
+- `mail` or `sendmail` command (for email alerts, requires Postfix/ssmtp)
 
 ### System Requirements
 - Access to `/proc` filesystem (standard on Linux)
@@ -67,9 +70,11 @@ The Deadlock Detector is a system-level tool that monitors Linux processes and d
 
 ---
 
-## 🐧 Installation on Linux
+## 🐧 Installation
 
-### Step 1: Install Dependencies
+### Installation on Linux
+
+#### Step 1: Install Dependencies
 
 ```bash
 # Update package list
@@ -80,15 +85,18 @@ sudo apt-get install -y build-essential gcc make
 
 # Install valgrind (optional, for memory leak testing)
 sudo apt-get install -y valgrind
+
+# Install mail utilities (for email alerts)
+sudo apt-get install -y postfix mailutils
 ```
 
-### Step 2: Clone or Navigate to Project Directory
+#### Step 2: Clone or Navigate to Project Directory
 
 ```bash
 cd /path/to/deadlock_detector
 ```
 
-### Step 3: Build the Project
+#### Step 3: Build the Project
 
 ```bash
 # Clean any previous builds
@@ -105,7 +113,7 @@ Build successful: bin/deadlock_detector
 ========================================
 ```
 
-### Step 4: Run Tests
+#### Step 4: Run Tests
 
 ```bash
 # Run all unit tests
@@ -125,7 +133,7 @@ All tests passed!
 ========================================
 ```
 
-### Step 5: Verify Installation
+#### Step 5: Verify Installation
 
 ```bash
 # Check if executable was created
@@ -135,11 +143,9 @@ ls -lh bin/deadlock_detector
 ./bin/deadlock_detector --help
 ```
 
----
+### Installation on WSL2 Ubuntu
 
-## 🪟 Installation on WSL2 Ubuntu
-
-### Step 1: Install WSL2 (if not already installed)
+#### Step 1: Install WSL2 (if not already installed)
 
 On Windows, open PowerShell as Administrator:
 
@@ -151,14 +157,14 @@ wsl --install
 wsl --set-default-version 2
 ```
 
-### Step 2: Launch WSL2 Ubuntu
+#### Step 2: Launch WSL2 Ubuntu
 
 ```bash
 # Open Ubuntu from Start Menu or run:
 wsl
 ```
 
-### Step 3: Install Dependencies in WSL2
+#### Step 3: Install Dependencies in WSL2
 
 ```bash
 # Update package list
@@ -169,9 +175,12 @@ sudo apt-get install -y build-essential gcc make
 
 # Install valgrind (optional)
 sudo apt-get install -y valgrind
+
+# Install mail utilities
+sudo apt-get install -y postfix mailutils
 ```
 
-### Step 4: Navigate to Project Directory
+#### Step 4: Navigate to Project Directory
 
 ```bash
 # If project is in Windows filesystem (e.g., D:\)
@@ -181,14 +190,14 @@ cd /mnt/d/DOCUMENT/System_Programing/deadlock_detector
 cd ~/deadlock_detector
 ```
 
-### Step 5: Build the Project
+#### Step 5: Build the Project
 
 ```bash
 # Clean and build
 make clean && make
 ```
 
-### Step 6: Run Tests
+#### Step 6: Run Tests
 
 ```bash
 make test
@@ -227,6 +236,9 @@ No deadlock detected.
 | `--interval` | `-i SEC` | Monitoring interval in seconds | 5 |
 | `--format` | `-f FORMAT` | Output format: text, json, verbose | text |
 | `--output` | `-o FILE` | Write output to file | stdout |
+| `--alert` | - | Alert mechanism: email or none | none |
+| `--email-to` | - | Comma-separated email recipients | - |
+| `--log-file` | - | Append results to log file | - |
 | `--version` | - | Show version information | - |
 
 ### Usage Examples
@@ -307,6 +319,324 @@ No deadlock detected.
 Deadlock Detector v1.0.0
 Copyright (C) 2024
 ```
+
+---
+
+## 📧 Email Alert Feature
+
+The deadlock detector can send email notifications when deadlocks are detected.
+
+### Quick Start
+
+#### Method 1: Using Configuration File (Recommended)
+
+1. Create or edit `email.conf` in the project directory:
+
+```conf
+email_to=admin@example.com
+sender_name=Deadlock Detector System
+```
+
+2. Run with email alert enabled:
+
+```bash
+./bin/deadlock_detector --alert email
+```
+
+Email will be automatically sent when a deadlock is detected.
+
+#### Method 2: Using Command-Line Options
+
+```bash
+# Send email to single recipient
+./bin/deadlock_detector --alert email --email-to admin@example.com
+
+# Send email to multiple recipients
+./bin/deadlock_detector --alert email \
+  --email-to admin@example.com,manager@example.com
+
+# Send email + log to file
+./bin/deadlock_detector --alert email \
+  --email-to admin@example.com \
+  --log-file /var/log/deadlock.log
+
+# Continuous monitoring with email alerts
+./bin/deadlock_detector -c -i 30 \
+  --alert email \
+  --email-to admin@example.com \
+  --log-file /var/log/deadlock.log
+```
+
+### Configuration File
+
+The `email.conf` file can be placed in:
+1. Project directory (current working directory) - **checked first**
+2. `~/.deadlock_detector/email.conf` - fallback location
+
+**Format:**
+```conf
+# Email Configuration for Deadlock Detector
+# Format: key=value (one per line)
+# Lines starting with # are comments
+
+email_to=admin@example.com
+sender_name=Deadlock Detector System
+```
+
+### Email Content
+
+When a deadlock is detected, the email includes:
+- **Subject**: `DEADLOCK ALERT: [timestamp]`
+- **Body**:
+  - Timestamp
+  - Deadlock status (YES/NO)
+  - Number of cycles detected
+  - List of deadlocked processes (PID + process name)
+  - Cycle details
+  - Recommendations for resolution
+  - Sender information
+
+### Log File Format
+
+If `--log-file` is specified, entries are written in this format:
+
+```
+[2025-11-10 21:52:30] DEADLOCK DETECTED
+  Processes: PID 1234 (process_name), PID 1235 (process_name)
+  Cycles: 4
+  Email: Email sent to: admin@example.com (SUCCESS 1/1)
+
+[2025-11-10 21:55:45] No deadlock detected
+  Email: Email alert state: No deadlock detected (NOT_TRIGGERED)
+```
+
+### Email Sending Method
+
+The detector uses the `mail` command (compatible with Postfix/ssmtp):
+
+1. Creates a temporary file with email body
+2. Executes: `mail -s "subject" "recipient" < temp_file`
+3. Cleans up temporary file
+
+**Requirements:**
+- `mail` command must be available (install Postfix or ssmtp)
+- Postfix/ssmtp must be configured for external email relay (if sending to external addresses)
+
+### Configuring ssmtp for Email Sending
+
+ssmtp is a simple sendmail replacement that forwards emails to an external SMTP server. It's easier to configure than Postfix for basic email sending.
+
+#### Step 1: Install ssmtp
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ssmtp mailutils
+```
+
+#### Step 2: Configure ssmtp
+
+Edit `/etc/ssmtp/ssmtp.conf`:
+
+```bash
+sudo nano /etc/ssmtp/ssmtp.conf
+```
+
+**For Gmail (using App Password):**
+
+```conf
+# /etc/ssmtp/ssmtp.conf
+
+# The user that gets all mail for userids < 1000
+root=your-email@gmail.com
+
+# The place where the mail goes
+mailhub=smtp.gmail.com:587
+
+# Where will the mail seem to come from?
+rewriteDomain=gmail.com
+
+# The full hostname
+hostname=your-hostname
+
+# Use SSL/TLS
+UseTLS=Yes
+UseSTARTTLS=Yes
+
+# Username and password for SMTP authentication
+AuthUser=your-email@gmail.com
+AuthPass=your-app-password
+
+# Set this to never rewrite the "From:" line
+FromLineOverride=YES
+```
+
+**For other SMTP servers:**
+
+```conf
+# /etc/ssmtp/ssmtp.conf
+
+root=your-email@example.com
+mailhub=smtp.example.com:587
+rewriteDomain=example.com
+hostname=your-hostname
+
+# Use SSL/TLS
+UseTLS=Yes
+UseSTARTTLS=Yes
+
+# SMTP authentication
+AuthUser=your-email@example.com
+AuthPass=your-password
+
+FromLineOverride=YES
+```
+
+#### Step 3: Configure revaliases (optional)
+
+Edit `/etc/ssmtp/revaliases` to set sender email for specific users:
+
+```bash
+sudo nano /etc/ssmtp/revaliases
+```
+
+Add:
+```
+root:your-email@gmail.com:smtp.gmail.com:587
+```
+
+#### Step 4: Set proper permissions
+
+```bash
+sudo chmod 640 /etc/ssmtp/ssmtp.conf
+sudo chmod 640 /etc/ssmtp/revaliases
+sudo chown root:mail /etc/ssmtp/ssmtp.conf
+sudo chown root:mail /etc/ssmtp/revaliases
+```
+
+#### Step 5: Test email sending
+
+```bash
+# Test with mail command
+echo "Test message" | mail -s "Test Subject" your-email@example.com
+
+# Or test with ssmtp directly
+echo "Test message" | ssmtp your-email@example.com
+```
+
+#### Gmail App Password Setup
+
+If using Gmail, you need to create an App Password:
+
+1. Go to [Google Account Settings](https://myaccount.google.com/)
+2. Security → 2-Step Verification (must be enabled)
+3. App passwords → Generate new app password
+4. Select "Mail" and your device
+5. Copy the 16-character password
+6. Use this password in `AuthPass` in `/etc/ssmtp/ssmtp.conf`
+
+**Important:** Never use your regular Gmail password. Always use App Passwords for SMTP authentication.
+
+#### Alternative: Using Postfix
+
+If you prefer Postfix instead of ssmtp:
+
+```bash
+# Install Postfix
+sudo apt-get install -y postfix
+
+# During installation, select "Internet Site"
+# Enter your domain name when prompted
+
+# Configure Postfix for Gmail relay
+sudo nano /etc/postfix/main.cf
+```
+
+Add to `main.cf`:
+```
+relayhost = [smtp.gmail.com]:587
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+smtp_sasl_security_options = noanonymous
+smtp_tls_security_level = encrypt
+smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
+```
+
+Create `/etc/postfix/sasl_passwd`:
+```
+[smtp.gmail.com]:587    your-email@gmail.com:your-app-password
+```
+
+Then:
+```bash
+sudo postmap /etc/postfix/sasl_passwd
+sudo chmod 600 /etc/postfix/sasl_passwd
+sudo systemctl restart postfix
+```
+
+### Troubleshooting Email
+
+**Email not being sent?**
+
+1. Check if `mail` command exists:
+   ```bash
+   which mail
+   ```
+
+2. Check Postfix status:
+   ```bash
+   sudo systemctl status postfix
+   ```
+
+3. Test mail command directly:
+   ```bash
+   echo "Test" | mail -s "Test Subject" your-email@example.com
+   ```
+
+4. Check email configuration:
+   ```bash
+   cat email.conf
+   ```
+
+5. Check debug logs (stderr):
+   ```bash
+   ./bin/deadlock_detector --alert email --email-to test@example.com 2>&1 | grep EMAIL
+   ```
+
+**Error: "mail command not found"**
+
+- Install Postfix: `sudo apt-get install postfix -y`
+- Or install ssmtp: `sudo apt-get install ssmtp mailutils -y`
+
+**ssmtp Configuration Issues:**
+
+1. **Check ssmtp configuration:**
+   ```bash
+   cat /etc/ssmtp/ssmtp.conf
+   ```
+
+2. **Check file permissions:**
+   ```bash
+   ls -l /etc/ssmtp/ssmtp.conf
+   # Should be: -rw-r----- root mail
+   ```
+
+3. **Test ssmtp directly:**
+   ```bash
+   echo "Test" | ssmtp -v your-email@example.com
+   ```
+
+4. **Check ssmtp logs:**
+   ```bash
+   tail -f /var/log/mail.log
+   # Or
+   journalctl -u ssmtp -f
+   ```
+
+5. **Common ssmtp errors:**
+   - **"Cannot open smtp.gmail.com:587"**: Check internet connection, firewall
+   - **"Authentication failed"**: Verify App Password is correct (Gmail)
+   - **"Permission denied"**: Check file permissions on `/etc/ssmtp/ssmtp.conf`
+   - **"relay access denied"**: Check `mailhub` setting in config
 
 ---
 
@@ -460,85 +790,6 @@ rm -f /tmp/deadlock_file*.lock
 
 ---
 
-## 📜 Demo Script
-
-Here's a complete bash script that demonstrates the deadlock detection workflow:
-
-```bash
-#!/bin/bash
-# deadlock_demo.sh - Comprehensive deadlock detection demo
-
-set -e
-
-echo "========================================="
-echo "  DEADLOCK DETECTOR DEMO"
-echo "========================================="
-echo ""
-
-# Step 1: Build the project
-echo "[1/5] Building project..."
-make clean > /dev/null 2>&1
-make > /dev/null 2>&1
-echo "✓ Build successful"
-echo ""
-
-# Step 2: Run unit tests
-echo "[2/5] Running unit tests..."
-make test
-echo ""
-
-# Step 3: Test pipe deadlock detection
-echo "[3/5] Testing pipe deadlock detection..."
-gcc -o pipe_deadlock pipe_deadlock.c
-./pipe_deadlock > /dev/null 2>&1 &
-PIPE_PID=$!
-sleep 2
-echo "  Pipe deadlock processes started (PIDs: $PIPE_PID and child)"
-echo "  Running detector..."
-./bin/deadlock_detector -v | grep -E "(DEADLOCK|Deadlocked|Cycle)" || echo "  No deadlock detected (may take a moment)"
-sleep 1
-pkill -f pipe_deadlock > /dev/null 2>&1
-echo "✓ Pipe deadlock test completed"
-echo ""
-
-# Step 4: Test file lock deadlock detection
-echo "[4/5] Testing file lock deadlock detection..."
-gcc -o file_deadlock file_deadlock.c
-./file_deadlock > /dev/null 2>&1 &
-FILE_PID=$!
-sleep 3
-echo "  File lock deadlock processes started (PIDs: $FILE_PID and child)"
-echo "  Running detector..."
-./bin/deadlock_detector -v | grep -E "(DEADLOCK|Deadlocked|Cycle)" || echo "  No deadlock detected (may take a moment)"
-sleep 1
-pkill -f file_deadlock > /dev/null 2>&1
-rm -f /tmp/deadlock_file*.lock
-echo "✓ File lock deadlock test completed"
-echo ""
-
-# Step 5: Memory leak check
-echo "[5/5] Checking for memory leaks..."
-valgrind --leak-check=full --error-exitcode=1 ./bin/deadlock_detector > /dev/null 2>&1
-echo "✓ No memory leaks detected"
-echo ""
-
-echo "========================================="
-echo "  DEMO COMPLETED SUCCESSFULLY"
-echo "========================================="
-```
-
-**Save and run the script:**
-
-```bash
-# Make script executable
-chmod +x deadlock_demo.sh
-
-# Run the demo
-./deadlock_demo.sh
-```
-
----
-
 ## 📄 Output Formats
 
 ### Text Format (Default)
@@ -641,6 +892,222 @@ Recommendations:
 
 ---
 
+## 🏗️ System Architecture
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────┐
+│           User Interface / Main                  │
+│         (CLI Arguments, Continuous Mode)        │
+└──────────────────────┬──────────────────────────┘
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+        ▼              ▼              ▼
+    ┌────────┐  ┌────────────┐  ┌─────────┐
+    │Process │  │ Resource   │  │Deadlock │
+    │Monitor │  │   Graph    │  │Detection│
+    │Module  │  │  Module    │  │ Engine  │
+    └────────┘  └────────────┘  └─────────┘
+        │              │              │
+        └──────────────┼──────────────┘
+                       │
+                       ▼
+            ┌──────────────────────┐
+            │  Cycle Detection     │
+            │   (DFS Algorithm)    │
+            └──────────┬───────────┘
+                       │
+                       ▼
+            ┌──────────────────────┐
+            │  Output Handler      │
+            │ (Report Generation)  │
+            └──────────────────────┘
+```
+
+### Core Modules
+
+1. **Process Monitor** (`process_monitor.c/.h`)
+   - Reads `/proc` filesystem
+   - Collects process information (PID, name, state)
+   - Identifies resources (pipes, file locks)
+   - Parses `/proc/[PID]/status`, `/proc/[PID]/fd`, `/proc/[PID]/locks`
+
+2. **Resource Graph** (`resource_graph.c/.h`)
+   - Builds Resource Allocation Graph (RAG)
+   - Uses adjacency list representation
+   - Supports request edges (P→R) and allocation edges (R→P)
+   - Handles single and multiple instance resources
+
+3. **Cycle Detection** (`cycle_detection.c/.h`)
+   - Implements DFS-based cycle detection
+   - Uses 3-color marking (WHITE, GRAY, BLACK)
+   - Time complexity: O(V+E)
+   - Finds all cycles in the graph
+
+4. **Deadlock Detection** (`deadlock_detection.c/.h`)
+   - Orchestrates detection process
+   - Analyzes cycles to identify deadlocks
+   - Distinguishes single-instance (definite) vs multi-instance (potential) deadlocks
+   - Generates comprehensive reports
+
+5. **Output Handler** (`output_handler.c/.h`)
+   - Formats results (Text, JSON, Verbose)
+   - Generates recommendations
+   - Exports to files
+
+6. **Email Alert** (`email_alert.c/.h`)
+   - Sends email notifications
+   - Logs detection results
+   - Configurable via file or command-line
+
+7. **Utility** (`utility.c/.h`)
+   - Helper functions (memory management, string operations)
+   - Error handling macros
+   - File I/O utilities
+
+### Algorithms
+
+#### Resource Allocation Graph (RAG)
+
+- **Definition**: Directed graph with two vertex types:
+  - Process vertices (P)
+  - Resource vertices (R)
+- **Edges**:
+  - Request edge: P → R (process P waits for resource R)
+  - Allocation edge: R → P (resource R is allocated to process P)
+- **Deadlock Rule**: Cycle in RAG with single-instance resources = definite deadlock
+
+#### DFS-Based Cycle Detection
+
+```
+1. Initialize all vertices = WHITE (unvisited)
+2. For each unvisited vertex:
+   a. Call DFS_VISIT(vertex)
+   b. In DFS_VISIT(v):
+      - Mark v = GRAY (processing)
+      - For each neighbor u:
+        * If u = WHITE: Recursively DFS_VISIT(u)
+        * If u = GRAY: Found cycle! (back edge)
+      - Mark v = BLACK (done)
+3. Return all cycles found
+```
+
+**Time Complexity**: O(V+E)  
+**Space Complexity**: O(V)
+
+---
+
+## 💻 Development Guide
+
+### Code Structure
+
+```
+deadlock_detector/
+├── src/                          # Source code
+│   ├── main.c                   # Main program entry point
+│   ├── process_monitor.c/.h     # Process monitoring from /proc
+│   ├── resource_graph.c/.h      # Resource Allocation Graph (RAG)
+│   ├── cycle_detection.c/.h     # DFS cycle detection algorithm
+│   ├── deadlock_detection.c/.h  # Deadlock detection engine
+│   ├── output_handler.c/.h      # Output formatting (text, JSON)
+│   ├── email_alert.c/.h         # Email alert system
+│   ├── utility.c/.h             # Utility functions
+│   └── config.h                 # Configuration constants
+│
+├── test/                         # Unit tests
+│   ├── test_graph.c             # Graph data structure tests
+│   ├── test_cycle.c             # Cycle detection tests
+│   └── test_system.c            # System integration tests
+│
+├── bin/                          # Compiled binaries
+│   ├── deadlock_detector        # Main executable
+│   ├── test_graph               # Graph test executable
+│   ├── test_cycle               # Cycle test executable
+│   └── test_system              # System test executable
+│
+├── obj/                          # Object files (generated)
+│   └── *.o, *.d                 # Compiled object files
+│
+├── pipe_deadlock.c              # Pipe deadlock demo program
+├── file_deadlock.c              # File lock deadlock demo program
+│
+├── Makefile                     # Build configuration
+├── README.md                    # This file
+└── .gitignore                   # Git ignore file
+```
+
+### Coding Standards
+
+#### Naming Conventions
+- **Functions**: `snake_case` (e.g., `get_process_list`, `detect_deadlock`)
+- **Constants**: `UPPER_CASE` (e.g., `MAX_PROCESSES`, `ERROR_FILE_NOT_FOUND`)
+- **Structs**: `PascalCase` (e.g., `ResourceGraph`, `ProcessNode`)
+- **Global variables**: `g_snake_case` (e.g., `g_process_count`)
+- **Static variables**: `s_snake_case` within file
+
+#### Error Handling
+- Return codes: `SUCCESS` (0) for success, negative values for errors
+- Always check return values
+- Use `safe_malloc()` wrapper for memory allocation
+- Log errors with `error_log()` macro
+
+#### Memory Management
+- Every `malloc()` must have corresponding `free()`
+- Use cleanup functions for complex structures
+- No memory leaks (verified with Valgrind)
+- Avoid buffer overflows (use `snprintf` instead of `sprintf`)
+
+#### Comments
+- Function header comments with description, parameters, return value
+- Inline comments for complex logic
+- Algorithm explanations with time/space complexity
+
+### Building from Source
+
+```bash
+# Clean previous build
+make clean
+
+# Build project
+make
+
+# Run tests
+make test
+
+# Check for memory leaks
+valgrind --leak-check=full ./bin/deadlock_detector -v
+```
+
+### Debugging
+
+#### Using GDB
+
+```bash
+gdb ./bin/deadlock_detector
+(gdb) break main
+(gdb) run -v
+(gdb) print pids
+(gdb) continue
+```
+
+#### Using Valgrind
+
+```bash
+valgrind --leak-check=full --show-leak-kinds=all \
+  ./bin/deadlock_detector -v
+```
+
+#### Using Strace
+
+```bash
+strace -e open,read -o trace.txt ./bin/deadlock_detector
+cat trace.txt
+```
+
+---
+
 ## 🔧 Troubleshooting
 
 ### Common Issues and Solutions
@@ -739,6 +1206,17 @@ wsl --shutdown
 - Verify processes are actually blocked: `strace -p <pid>`
 - Run with verbose mode: `./bin/deadlock_detector -v`
 
+#### 9. Email Not Sending
+
+**Problem:** Email alerts not working
+
+**Solution:**
+- Check if `mail` command exists: `which mail`
+- Check Postfix status: `sudo systemctl status postfix`
+- Test mail command: `echo "Test" | mail -s "Test" your-email@example.com`
+- Check debug logs: `./bin/deadlock_detector --alert email 2>&1 | grep EMAIL`
+- Verify email configuration: `cat email.conf`
+
 ---
 
 ## 📁 Project Structure
@@ -752,6 +1230,7 @@ deadlock_detector/
 │   ├── cycle_detection.c/.h     # DFS cycle detection algorithm
 │   ├── deadlock_detection.c/.h  # Deadlock detection engine
 │   ├── output_handler.c/.h      # Output formatting (text, JSON)
+│   ├── email_alert.c/.h         # Email alert system
 │   ├── utility.c/.h             # Utility functions
 │   └── config.h                 # Configuration constants
 │
@@ -771,10 +1250,10 @@ deadlock_detector/
 │
 ├── pipe_deadlock.c              # Pipe deadlock demo program
 ├── file_deadlock.c              # File lock deadlock demo program
-├── process_deadlock.c           # Process deadlock demo program
 │
 ├── Makefile                     # Build configuration
 ├── README.md                    # This file
+├── email.conf                   # Email configuration (optional)
 └── .gitignore                   # Git ignore file
 ```
 
@@ -784,6 +1263,7 @@ deadlock_detector/
 - **`src/process_monitor.c`**: Reads `/proc` filesystem, collects process information
 - **`src/deadlock_detection.c`**: Main deadlock detection logic, RAG building
 - **`src/cycle_detection.c`**: DFS algorithm for cycle detection
+- **`src/email_alert.c`**: Email notification system
 - **`Makefile`**: Build system with test targets
 
 ---
@@ -817,13 +1297,19 @@ deadlock_detector/
    - JSON format (machine-readable)
    - Verbose format (detailed debugging)
 
-6. **Comprehensive Testing**
+6. **Email Alert System**
+   - Sends email notifications when deadlocks detected
+   - Supports multiple recipients
+   - Logs detection results to file
+   - Configurable via file or command-line
+
+7. **Comprehensive Testing**
    - 116 unit tests
    - Graph structure tests
    - Cycle detection tests
    - System integration tests
 
-7. **Memory Safety**
+8. **Memory Safety**
    - Valgrind-clean (no memory leaks)
    - Proper memory management
    - Safe error handling
@@ -859,8 +1345,9 @@ deadlock_detector/
 - Semaphore and mutex deadlock detection
 - Network socket deadlock detection
 - Graphical visualization of deadlock cycles
-- Real-time alerting and notifications
+- Real-time alerting and notifications (enhanced)
 - Performance optimizations for large systems
+- Web dashboard for monitoring
 
 ---
 

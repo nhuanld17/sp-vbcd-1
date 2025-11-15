@@ -41,6 +41,9 @@
 #define MAX_LINE_LEN 1024
 #define MAX_FDS_PER_PROCESS 1024
 #define MAX_RESOURCES_PER_PROCESS 256
+#define MAX_EMAIL_RECIPIENTS_LEN 1024
+#define MAX_SENDER_NAME_LEN 128
+#define MAX_EMAIL_SUBJECT_LEN 256
 
 /* =============================================================================
  * PROCESS STATES
