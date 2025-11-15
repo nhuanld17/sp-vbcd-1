@@ -253,70 +253,24 @@ static int append_status(const char *recipient, int success)
 
 int send_email_alert(const char *email_to, const char *subject, const char *body)
 {
+    fprintf(stderr, "[EMAIL] send_email_alert() called\n");
+    fprintf(stderr, "[EMAIL] Recipient: '%s'\n", email_to ? email_to : "(NULL)");
+    fprintf(stderr, "[EMAIL] Subject: '%s'\n", subject ? subject : "(NULL)");
+    
     reset_last_status();
 
     if (email_to == NULL || subject == NULL || body == NULL) {
+        fprintf(stderr, "[EMAIL] ERROR: Invalid arguments (NULL)\n");
         return ERROR_INVALID_ARGUMENT;
     }
 
     if (email_to[0] == '\0') {
+        fprintf(stderr, "[EMAIL] ERROR: Empty email_to\n");
         return ERROR_INVALID_ARGUMENT;
     }
 
-    /* Use SMTP if configured, otherwise fallback to mail command */
-    if (g_alert_options.smtp_server[0] != '\0' && g_alert_options.smtp_port > 0) {
-        /* Use direct SMTP connection */
-        const char *from = (g_alert_options.from_email[0] != '\0') ?
-                          g_alert_options.from_email : "deadlock-detector@localhost";
-        
-        int result = send_email_via_smtp(
-            g_alert_options.smtp_server,
-            g_alert_options.smtp_port,
-            from,
-            email_to,
-            subject,
-            body
-        );
-        
-        if (result == SUCCESS) {
-            /* Count recipients */
-            char recipients_copy[MAX_EMAIL_RECIPIENTS_LEN];
-            strncpy(recipients_copy, email_to, sizeof(recipients_copy) - 1);
-            recipients_copy[sizeof(recipients_copy) - 1] = '\0';
-            
-            char *saveptr = NULL;
-            char *token = strtok_r(recipients_copy, ",", &saveptr);
-            while (token != NULL) {
-                char *recipient = str_trim(token);
-                if (recipient != NULL && recipient[0] != '\0') {
-                    g_last_result.total_recipients++;
-                    g_last_result.successful_recipients++;
-                    append_status(recipient, 1);
-                }
-                token = strtok_r(NULL, ",", &saveptr);
-            }
-        } else {
-            /* SMTP failed, count recipients but mark as failed */
-            char recipients_copy[MAX_EMAIL_RECIPIENTS_LEN];
-            strncpy(recipients_copy, email_to, sizeof(recipients_copy) - 1);
-            recipients_copy[sizeof(recipients_copy) - 1] = '\0';
-            
-            char *saveptr = NULL;
-            char *token = strtok_r(recipients_copy, ",", &saveptr);
-            while (token != NULL) {
-                char *recipient = str_trim(token);
-                if (recipient != NULL && recipient[0] != '\0') {
-                    g_last_result.total_recipients++;
-                    append_status(recipient, 0);
-                }
-                token = strtok_r(NULL, ",", &saveptr);
-            }
-        }
-        
-        return result;
-    }
-    
-    /* Fallback to mail command (legacy method) */
+    /* Use mail command (works with ssmtp/sendmail) */
+    fprintf(stderr, "[EMAIL] Using mail command\n");
     char recipients_copy[MAX_EMAIL_RECIPIENTS_LEN];
     strncpy(recipients_copy, email_to, sizeof(recipients_copy) - 1);
     recipients_copy[sizeof(recipients_copy) - 1] = '\0';
@@ -324,18 +278,22 @@ int send_email_alert(const char *email_to, const char *subject, const char *body
     char temp_file[256];
     snprintf(temp_file, sizeof(temp_file), "/tmp/deadlock_email_%d_%ld.txt",
              (int)getpid(), (long)time(NULL));
+    fprintf(stderr, "[EMAIL] Temp file: %s\n", temp_file);
 
     FILE *fp = fopen(temp_file, "w");
     if (fp == NULL) {
+        fprintf(stderr, "[EMAIL] ERROR: Failed to create temp file\n");
         return ERROR_SYSTEM_CALL_FAILED;
     }
 
     if (fprintf(fp, "%s", body) < 0) {
+        fprintf(stderr, "[EMAIL] ERROR: Failed to write to temp file\n");
         fclose(fp);
         unlink(temp_file);
         return ERROR_SYSTEM_CALL_FAILED;
     }
     fclose(fp);
+    fprintf(stderr, "[EMAIL] Temp file written successfully\n");
 
     char subject_escaped[MAX_EMAIL_SUBJECT_LEN * 4];
     escape_quotes(subject, subject_escaped, sizeof(subject_escaped));
@@ -355,24 +313,31 @@ int send_email_alert(const char *email_to, const char *subject, const char *body
                      subject_escaped,
                      recipient,
                      temp_file);
+            fprintf(stderr, "[EMAIL] Executing command: %s\n", command);
 
             int sys_result = system(command);
             int success = 0;
             if (sys_result == -1) {
+                fprintf(stderr, "[EMAIL] ERROR: system() call failed\n");
                 last_error = ERROR_SYSTEM_CALL_FAILED;
             } else if (WIFEXITED(sys_result)) {
                 int exit_code = WEXITSTATUS(sys_result);
+                fprintf(stderr, "[EMAIL] mail command exit code: %d\n", exit_code);
                 if (exit_code == 0) {
                     success = 1;
                     g_last_result.successful_recipients++;
+                    fprintf(stderr, "[EMAIL] SUCCESS: Email sent to %s\n", recipient);
                 } else {
                     if (exit_code == 127) {
+                        fprintf(stderr, "[EMAIL] ERROR: mail command not found (exit 127)\n");
                         last_error = ERROR_SYSTEM_CALL_FAILED;
                     } else {
+                        fprintf(stderr, "[EMAIL] ERROR: mail command failed (exit %d)\n", exit_code);
                         last_error = ERROR_SYSTEM_CALL_FAILED;
                     }
                 }
             } else {
+                fprintf(stderr, "[EMAIL] ERROR: mail command did not exit normally\n");
                 last_error = ERROR_SYSTEM_CALL_FAILED;
             }
 
@@ -590,7 +555,15 @@ void email_alert_set_options(const EmailAlertOptions *options)
 
 void email_alert_handle_detection(const DeadlockReport *report, int deadlock_status)
 {
+    fprintf(stderr, "[EMAIL] === EMAIL ALERT TRIGGERED ===\n");
+    fprintf(stderr, "[EMAIL] deadlock_status: %d\n", deadlock_status);
+    fprintf(stderr, "[EMAIL] enable_email: %d\n", g_alert_options.enable_email);
+    fprintf(stderr, "[EMAIL] recipients: '%s'\n", g_alert_options.recipients);
+    fprintf(stderr, "[EMAIL] smtp_server: '%s'\n", g_alert_options.smtp_server);
+    fprintf(stderr, "[EMAIL] smtp_port: %d\n", g_alert_options.smtp_port);
+    
     if (report == NULL) {
+        fprintf(stderr, "[EMAIL] ERROR: report is NULL\n");
         return;
     }
 
@@ -605,19 +578,23 @@ void email_alert_handle_detection(const DeadlockReport *report, int deadlock_sta
     email_status_summary[0] = '\0';
 
     if (!g_alert_options.enable_email) {
+        fprintf(stderr, "[EMAIL] Email alert is DISABLED\n");
         strncpy(email_status_label, "DISABLED", sizeof(email_status_label) - 1);
         email_status_label[sizeof(email_status_label) - 1] = '\0';
         snprintf(email_status_summary, sizeof(email_status_summary), "Email alert disabled");
     }
 
     if (deadlock_status > 0) {
+        fprintf(stderr, "[EMAIL] Deadlock detected (status=%d), attempting to send email\n", deadlock_status);
         if (g_alert_options.enable_email) {
             if (g_alert_options.recipients[0] == '\0') {
+                fprintf(stderr, "[EMAIL] ERROR: No recipients configured\n");
                 strncpy(email_status_label, "NOT_SENT", sizeof(email_status_label) - 1);
                 email_status_label[sizeof(email_status_label) - 1] = '\0';
                 snprintf(email_status_summary, sizeof(email_status_summary),
                          "No recipients configured");
             } else {
+                fprintf(stderr, "[EMAIL] Building email body...\n");
                 char subject[MAX_EMAIL_SUBJECT_LEN];
                 if (timestamp[0] != '\0') {
                     snprintf(subject, sizeof(subject), "DEADLOCK ALERT: %s", timestamp);
@@ -628,11 +605,13 @@ void email_alert_handle_detection(const DeadlockReport *report, int deadlock_sta
 
                 char *body = build_deadlock_email_body(report, g_alert_options.sender_name);
                 if (body == NULL) {
+                    fprintf(stderr, "[EMAIL] ERROR: Failed to build email body\n");
                     strncpy(email_status_label, "FAILED", sizeof(email_status_label) - 1);
                     email_status_label[sizeof(email_status_label) - 1] = '\0';
                     snprintf(email_status_summary, sizeof(email_status_summary),
                              "Failed to build email body");
                 } else {
+                    fprintf(stderr, "[EMAIL] Email body built successfully, calling send_email_alert()\n");
                     email_attempted = 1;
                     email_send_code = send_email_alert(g_alert_options.recipients, subject, body);
                     email_alert_get_last_result(&email_result);
@@ -661,6 +640,7 @@ void email_alert_handle_detection(const DeadlockReport *report, int deadlock_sta
             }
         }
     } else {
+        fprintf(stderr, "[EMAIL] No deadlock detected (status=%d), email NOT sent\n", deadlock_status);
         if (g_alert_options.enable_email) {
             strncpy(email_status_label, "NOT_TRIGGERED", sizeof(email_status_label) - 1);
             email_status_label[sizeof(email_status_label) - 1] = '\0';

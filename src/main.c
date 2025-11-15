@@ -269,8 +269,10 @@ static int parse_arguments(int argc, char** argv, CommandLineArgs* args)
             const char* alert_mode = argv[++i];
             if (strcmp(alert_mode, "email") == 0) {
                 args->alert_email = 1;
+                fprintf(stderr, "[DEBUG] Alert type set to: email\n");
             } else if (strcmp(alert_mode, "none") == 0) {
                 args->alert_email = 0;
+                fprintf(stderr, "[DEBUG] Alert type set to: none\n");
             } else {
                 fprintf(stderr, "Error: Unsupported alert mode '%s'\n", alert_mode);
                 return ERROR_INVALID_ARGUMENT;
@@ -283,6 +285,7 @@ static int parse_arguments(int argc, char** argv, CommandLineArgs* args)
             }
             strncpy(args->email_recipients, argv[++i], sizeof(args->email_recipients) - 1);
             args->email_recipients[sizeof(args->email_recipients) - 1] = '\0';
+            fprintf(stderr, "[DEBUG] Email recipients: %s\n", args->email_recipients);
         }
         else if (strcmp(argv[i], "--log-file") == 0) {
             if (i + 1 >= argc) {
@@ -547,6 +550,14 @@ int main(int argc, char** argv)
     alert_options.from_email[sizeof(alert_options.from_email) - 1] = '\0';
 
     email_alert_set_options(&alert_options);
+    
+    fprintf(stderr, "[DEBUG] Email alert configuration:\n");
+    fprintf(stderr, "[DEBUG]   enable_email: %d\n", alert_options.enable_email);
+    fprintf(stderr, "[DEBUG]   recipients: '%s'\n", alert_options.recipients);
+    fprintf(stderr, "[DEBUG]   smtp_server: '%s'\n", alert_options.smtp_server);
+    fprintf(stderr, "[DEBUG]   smtp_port: %d\n", alert_options.smtp_port);
+    fprintf(stderr, "[DEBUG]   from_email: '%s'\n", alert_options.from_email);
+    fprintf(stderr, "[DEBUG]   log_file: '%s'\n", alert_options.log_file);
     
     /* Setup signal handlers for graceful shutdown */
     if (setup_signal_handlers() != SUCCESS) {

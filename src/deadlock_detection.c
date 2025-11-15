@@ -841,19 +841,25 @@ int detect_deadlock_in_system(ProcessResourceInfo* procs, int num_procs,
     
     /* Step 4: Generate explanations and recommendations */
     if (report->deadlock_detected) {
+        fprintf(stderr, "[DEBUG] Deadlock detected, checking if email alert enabled\n");
         int explain_result = generate_explanations(report, graph);
         if (explain_result != SUCCESS) {
             debug_log("Failed to generate explanations: %d", explain_result);
             /* Non-fatal, continue */
         }
-        
+
         int rec_result = generate_recommendations(report, graph);
         if (rec_result != SUCCESS) {
             debug_log("Failed to generate recommendations: %d", rec_result);
             /* Non-fatal, continue */
         }
+    } else {
+        fprintf(stderr, "[DEBUG] No deadlock detected, deadlock_status = %d\n", 
+                report->deadlock_detected ? 1 : 0);
     }
-    
+
+    fprintf(stderr, "[DEBUG] Calling email_alert_handle_detection with deadlock_status=%d\n",
+            report->deadlock_detected ? 1 : 0);
     email_alert_handle_detection(report, report->deadlock_detected ? 1 : 0);
     
     /* Cleanup graph */
